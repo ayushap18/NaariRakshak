@@ -162,6 +162,28 @@
     }
     .hdr-btn:hover { background: rgba(255,255,255,0.14); }
     .hdr-btn.active { border-color: var(--accent); color: #FF6B6B; }
+    .hdr-btn.mode-demo { border-color: #FF6F00; color: #FF6F00; background: rgba(255,111,0,0.12); }
+    .hdr-btn.mode-live { border-color: #2E7D32; color: #4CAF50; background: rgba(46,125,50,0.12); }
+
+    .chat-badge {
+      display: inline-block;
+      background: #E53935;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 8px;
+      margin-left: 4px;
+      animation: pulse-badge 1.5s infinite;
+    }
+    @keyframes pulse-badge { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+    .chat-msg.system {
+      background: rgba(255,255,255,0.04);
+      border-left: 3px solid #FF6F00;
+      font-style: italic;
+      color: #aaa;
+    }
 
     #conn-dot {
       width: 8px; height: 8px;
@@ -821,8 +843,10 @@
 
     <div id="header-controls">
       <div id="conn-dot" title="Connection status"></div>
+      <button class="hdr-btn" id="btn-mode" onclick="toggleMode()" title="Switch Demo/Live mode">🧪 DEMO</button>
       <button class="hdr-btn active" id="btn-sound" onclick="toggleSound()">🔊 Sound ON</button>
-      <button class="hdr-btn" onclick="resetDemo()">↺ Reset Demo</button>
+      <button class="hdr-btn" id="btn-simulate" onclick="simulateSOS()" title="Simulate SOS for demo">⚡ Simulate SOS</button>
+      <button class="hdr-btn" id="btn-reset" onclick="resetDemo()">↺ Reset Demo</button>
     </div>
   </header>
 
@@ -978,9 +1002,11 @@ const layerState = { alerts: true, responders: true, danger: true, heatmap: fals
 let soundEnabled  = true;
 let activeFilter  = 'all';
 let activeRespTab = 'official';
+let isDemoMode    = true; // default, updated from server
 
 // Chat state
 let chatAlertId = null;
+const chatUnread = {}; // alert_id → count of unread messages
 
 // Modal state
 let dispatchTargetAlertId = null;
@@ -996,6 +1022,7 @@ socket.on('connect', () => {
   loadResponders();
   loadDangerZones();
   loadStats();
+  loadMode();
 });
 
 socket.on('disconnect', () => {
@@ -1054,9 +1081,24 @@ socket.on('location_updated', data => {
 });
 
 socket.on('new_chat_message', msg => {
+  // Always append if chat panel is open for this alert
   if (chatAlertId && msg.alert_id === chatAlertId) {
     appendChatMessage(msg);
+  } else if (msg.alert_id) {
+    // Track unread for badge
+    chatUnread[msg.alert_id] = (chatUnread[msg.alert_id] || 0) + 1;
+    renderAlerts(); // re-render to show badge
   }
+  // Show toast for new messages from users (so operator notices)
+  if (msg.sender_type === 'user') {
+    showToast(`💬 New message from ${msg.sender_name || 'User'} on alert #${(msg.alert_id||'').substring(0,8)}`, 'info');
+    if (soundEnabled) playAlertSound();
+  }
+});
+
+socket.on('mode_changed', data => {
+  isDemoMode = data.mode === 'demo';
+  updateModeUI();
 });
 
 socket.on('danger_zone_added', zone => {
@@ -1381,7 +1423,9 @@ function buildAlertCard(a) {
     `;
   }
 
-  actionBtns += `<button class="btn btn-chat" onclick="event.stopPropagation();openChatPanel('${a.alert_id}')">💬 Chat</button>`;
+  const unread = chatUnread[a.alert_id] || 0;
+  const badge = unread > 0 ? `<span class="chat-badge">${unread}</span>` : '';
+  actionBtns += `<button class="btn btn-chat" onclick="event.stopPropagation();openChatPanel('${a.alert_id}')">💬 Chat${badge}</button>`;
 
   return `
     <div class="alert-card level-${level}" id="card-${a.alert_id}" onclick="focusAlert('${a.alert_id}')">
@@ -1575,6 +1619,10 @@ function quickDispatch(responderId) {
 ───────────────────────────────────────────────── */
 async function openChatPanel(alertId) {
   chatAlertId = alertId;
+  // Clear unread badge
+  delete chatUnread[alertId];
+  renderAlerts();
+
   const shortId = (alertId || '').substring(0, 8);
   document.getElementById('chat-title').textContent = `💬 Chat — Alert #${shortId}`;
   document.getElementById('chat-messages').innerHTML = '';
@@ -1597,9 +1645,11 @@ function closeChatPanel() {
 
 function appendChatMessage(msg) {
   const container = document.getElementById('chat-messages');
-  const isOp = msg.sender_type === 'operator' || msg.sender_type === 'responder';
-  const div = document.createElement('div');
-  div.className = 'chat-msg ' + (isOp ? 'operator' : 'user');
+  const isSys = msg.sender_type === 'system';
+  const isOp  = msg.sender_type === 'operator' || msg.sender_type === 'responder';
+  const cls   = isSys ? 'system' : (isOp ? 'operator' : 'user');
+  const div   = document.createElement('div');
+  div.className = 'chat-msg ' + cls;
   div.innerHTML = `
     <div>${escapeHtml(msg.message)}</div>
     <div class="chat-msg-meta">${escapeHtml(msg.sender_name || 'Unknown')} · ${formatTimeAgo(msg.timestamp)}</div>
@@ -1621,6 +1671,50 @@ async function sendChatMessage() {
     sender_type: 'operator',
     sender_name: 'Command Center'
   });
+}
+
+/* ─────────────────────────────────────────────────
+   MODE TOGGLE (Demo / Live)
+───────────────────────────────────────────────── */
+async function loadMode() {
+  try {
+    const r = await fetch('/api/mode');
+    const d = await r.json();
+    isDemoMode = d.mode === 'demo';
+    updateModeUI();
+  } catch(e) { console.error('loadMode', e); }
+}
+
+async function toggleMode() {
+  const newMode = isDemoMode ? 'live' : 'demo';
+  try {
+    const r = await fetch('/api/mode', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ mode: newMode })
+    });
+    const d = await r.json();
+    isDemoMode = d.mode === 'demo';
+    updateModeUI();
+    showToast(`Switched to ${isDemoMode ? 'DEMO' : 'LIVE'} mode`, 'info');
+  } catch(e) { showToast('Failed to switch mode', 'danger'); }
+}
+
+function updateModeUI() {
+  const btn = document.getElementById('btn-mode');
+  const simBtn = document.getElementById('btn-simulate');
+  const resetBtn = document.getElementById('btn-reset');
+  if (isDemoMode) {
+    btn.textContent = '🧪 DEMO';
+    btn.className = 'hdr-btn mode-demo';
+    simBtn.style.display = '';
+    resetBtn.style.display = '';
+  } else {
+    btn.textContent = '🟢 LIVE';
+    btn.className = 'hdr-btn mode-live';
+    simBtn.style.display = 'none';
+    resetBtn.style.display = 'none';
+  }
 }
 
 /* ─────────────────────────────────────────────────
@@ -1672,25 +1766,61 @@ async function resetDemo() {
   } catch(e) { console.error(e); }
 }
 
+async function simulateSOS(triggerMethod) {
+  const btn = document.getElementById('btn-simulate');
+  const methods = ['button', 'shake', 'voice', 'timer_expired'];
+  const method = triggerMethod || methods[Math.floor(Math.random() * 3)];
+  btn.textContent = '⏳ Simulating…';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/simulate-sos', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ trigger_method: method })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`🚨 Demo SOS triggered in ${data.area || 'Delhi'} via ${method}`, 'danger');
+    } else {
+      showToast('Simulate failed: ' + (data.error || 'unknown error'));
+    }
+  } catch(e) {
+    showToast('Network error during simulate');
+  } finally {
+    setTimeout(() => { btn.textContent = '⚡ Simulate SOS'; btn.disabled = false; }, 2000);
+  }
+}
+
 /* ─────────────────────────────────────────────────
    AI INSIGHT BANNER
 ───────────────────────────────────────────────── */
 function updateAIBanner() {
   const active = Object.values(alerts).filter(a => ['triggered','acknowledged','dispatched'].includes(a.status));
-  const critCount = active.filter(a => a.threat_level === 'critical').length;
-  const hour = new Date().getHours();
+  const critCount  = active.filter(a => a.threat_level === 'critical').length;
+  const highCount  = active.filter(a => a.threat_level === 'high').length;
+  const hour       = new Date().getHours();
   const isHighRisk = hour >= 23 || hour <= 2;
+  const isEvening  = hour >= 20 && hour < 23;
+  const dzCount    = dangerCircles.length;
 
-  let text = '';
-  if (active.length === 0) {
-    text = 'No active threats detected — system nominal.';
-  } else {
-    const locations = [...new Set(active.map(a => getLocationLabel(a)).filter(Boolean))];
-    const locStr = locations.slice(0,2).join(', ') || 'Delhi';
-    text = `${critCount > 0 ? critCount + ' critical alert' + (critCount > 1 ? 's' : '') + ' — ' : ''}${active.length} cluster${active.length > 1 ? 's' : ''} detected in ${locStr}`;
-    if (isHighRisk) text = `High-risk time window (11PM–2AM) — ${text}`;
+  let parts = [];
+
+  if (isHighRisk)   parts.push('⚠️ High-risk time window (11PM–2AM)');
+  else if (isEvening) parts.push('Evening watch active');
+
+  if (critCount > 0) parts.push(`${critCount} CRITICAL alert${critCount > 1 ? 's' : ''}`);
+  if (highCount > 0) parts.push(`${highCount} HIGH alert${highCount > 1 ? 's' : ''}`);
+  if (dzCount   > 0) parts.push(`${dzCount} danger zone${dzCount > 1 ? 's' : ''} on heatmap`);
+
+  // AI confidence from latest alert
+  const latest = active.sort((a,b) => new Date(b.triggered_at) - new Date(a.triggered_at))[0];
+  if (latest && latest.ai_confidence) {
+    const pct = Math.round((latest.ai_risk_score || latest.ai_confidence) * 100);
+    const dangerBoost = latest.ai_factors && JSON.parse(latest.ai_factors || '{}').in_danger_zone;
+    parts.push(`AI confidence ${pct}%${dangerBoost ? ' (+15% danger zone)' : ''}`);
   }
 
+  const text = parts.length > 0 ? parts.join(' — ') : 'All clear — monitoring Delhi NCR';
   document.getElementById('ai-insight-text').textContent = text;
 }
 

@@ -48,6 +48,9 @@ mesh_network = MeshNetworkSimulator()
 active_users = {}  # {user_id: socket_id}
 active_alerts = {}  # {alert_id: alert_data}
 
+# Runtime mode: can be toggled via API
+app_mode = {'demo': app.config.get('DEMO_MODE', True)}
+
 
 # ============ REST API ENDPOINTS ============
 
@@ -80,8 +83,28 @@ def health_check():
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'active_alerts': len(active_alerts),
-        'connected_users': len(active_users)
+        'connected_users': len(active_users),
+        'mode': 'demo' if app_mode['demo'] else 'live'
     })
+
+
+@app.route('/api/mode', methods=['GET', 'POST', 'OPTIONS'])
+def manage_mode():
+    """Get or switch app mode (demo/live)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    if request.method == 'POST':
+        data = request.json or {}
+        new_mode = data.get('mode', '').lower()
+        if new_mode == 'demo':
+            app_mode['demo'] = True
+        elif new_mode == 'live':
+            app_mode['demo'] = False
+        else:
+            return jsonify({'error': 'mode must be "demo" or "live"'}), 400
+        socketio.emit('mode_changed', {'mode': 'demo' if app_mode['demo'] else 'live'})
+        return jsonify({'mode': 'demo' if app_mode['demo'] else 'live'})
+    return jsonify({'mode': 'demo' if app_mode['demo'] else 'live'})
 
 
 @app.route('/api/register', methods=['POST', 'OPTIONS'])
@@ -244,6 +267,31 @@ def trigger_sos():
                     'alert_id': alert_id,
                     'responder': auto_dispatched
                 }, room=f'user_{user.id}')
+
+        # Auto-send system chat message so dashboard sees context immediately
+        sys_msg = ChatMessage(
+            alert_id=alert_id,
+            sender_type='system',
+            sender_name='NaariRakshak',
+            message=f'🚨 SOS triggered via {trigger_method} by {user.name or "User"}. Threat level: {threat_level.upper()}. AI confidence: {int(confidence*100)}%.',
+            is_quick_reply=False
+        )
+        session.add(sys_msg)
+        session.commit()
+        sys_msg_dict = sys_msg.to_dict()
+        socketio.emit('new_chat_message', sys_msg_dict)
+
+        if auto_dispatched:
+            dispatch_msg = ChatMessage(
+                alert_id=alert_id,
+                sender_type='system',
+                sender_name='NaariRakshak',
+                message=f'✅ Auto-dispatched {auto_dispatched["name"]} ({auto_dispatched["type"]}) to respond.',
+                is_quick_reply=False
+            )
+            session.add(dispatch_msg)
+            session.commit()
+            socketio.emit('new_chat_message', dispatch_msg.to_dict())
 
         return jsonify({
             'message': 'SOS alert triggered',
@@ -1011,29 +1059,35 @@ def handle_volunteer_status(data):
 # ============ HELPER FUNCTIONS ============
 
 def find_nearby_responders(session, latitude, longitude, radius_km=5):
-    """Find responders within radius"""
+    """Find responders within radius — progressively expands if none found"""
     if not latitude or not longitude:
         return []
-    
-    responders = session.query(Responder).filter_by(is_available=True).all()
-    
-    nearby = []
-    for responder in responders:
-        if responder.latitude and responder.longitude:
-            distance = calculate_distance(
-                latitude, longitude,
-                responder.latitude, responder.longitude
-            )
-            if distance <= radius_km:
-                nearby.append(responder)
-    
-    return nearby
+
+    all_responders = session.query(Responder).filter_by(is_available=True).all()
+
+    # Compute distances for all responders
+    with_dist = []
+    for r in all_responders:
+        if r.latitude and r.longitude:
+            dist = calculate_distance(latitude, longitude, r.latitude, r.longitude)
+            with_dist.append((dist, r))
+
+    with_dist.sort(key=lambda x: x[0])
+
+    # Progressive radius: 5km → 15km → 50km (guarantees a responder is always found for demo)
+    for max_radius in [radius_km, 15, 50]:
+        nearby = [r for dist, r in with_dist if dist <= max_radius]
+        if nearby:
+            return nearby
+
+    # Absolute fallback: return nearest regardless of distance
+    return [r for _, r in with_dist[:3]] if with_dist else []
 
 
 # ============ INITIALIZATION ============
 
 def init_demo_data():
-    """Initialize demo data for testing"""
+    """Initialize demo data for testing — spread across Delhi-NCR"""
     session = get_session(engine)
     
     # Check if demo data already exists
@@ -1042,117 +1096,175 @@ def init_demo_data():
         session.close()
         return
     
-    # Indian names and locations
-    responder_names = [
-        ('Officer Rajesh Kumar', 'police', '+91-9876543210'),
-        ('Officer Priya Sharma', 'police', '+91-9876543211'),
-        ('Officer Amit Singh', 'police', '+91-9876543212'),
-        ('Officer Kavita Desai', 'police', '+91-9876543213'),
-        ('Officer Rahul Verma', 'police', '+91-9876543214'),
-        ('Volunteer Anjali Patel', 'volunteer', '+91-9876543215'),
-        ('Volunteer Rohan Gupta', 'volunteer', '+91-9876543216'),
-        ('Volunteer Neha Reddy', 'volunteer', '+91-9876543217'),
-        ('Volunteer Arjun Nair', 'volunteer', '+91-9876543218'),
-        ('Volunteer Simran Kaur', 'volunteer', '+91-9876543219'),
-        ('Volunteer Vikram Rao', 'volunteer', '+91-9876543220'),
-        ('Volunteer Pooja Joshi', 'volunteer', '+91-9876543221'),
-        ('Ambulance Unit 1', 'medical', '+91-9876543222'),
-        ('Ambulance Unit 2', 'medical', '+91-9876543223'),
-        ('Ambulance Unit 3', 'medical', '+91-9876543224'),
-        ('Security Team Alpha', 'security', '+91-9876543225'),
-        ('Security Team Beta', 'security', '+91-9876543226'),
-        ('Community Helper Ravi', 'volunteer', '+91-9876543227'),
-        ('Community Helper Meera', 'volunteer', '+91-9876543228'),
-        ('Rapid Response Unit 1', 'police', '+91-9876543229'),
-        ('Rapid Response Unit 2', 'police', '+91-9876543230'),
-        ('Night Patrol Team', 'police', '+91-9876543231'),
-        ('Women Safety Squad', 'police', '+91-9876543232'),
-        ('Emergency Response Team', 'medical', '+91-9876543233'),
-        ('Crisis Support Unit', 'volunteer', '+91-9876543234'),
+    # Responders at real Delhi-NCR landmarks
+    responder_data = [
+        # Police — spread across Delhi
+        ('Officer Rajesh Kumar',   'police',    '+91-9876543210', 28.6328, 77.2197),  # Connaught Place
+        ('Officer Priya Sharma',   'police',    '+91-9876543211', 28.6562, 77.2315),  # Karol Bagh
+        ('Officer Amit Singh',     'police',    '+91-9876543212', 28.5672, 77.2100),  # Saket
+        ('Officer Kavita Desai',   'police',    '+91-9876543213', 28.5918, 77.0463),  # Dwarka Sec 10
+        ('Officer Rahul Verma',    'police',    '+91-9876543214', 28.6920, 77.1510),  # Pitampura
+        ('Rapid Response Unit 1',  'police',    '+91-9876543229', 28.6127, 77.2310),  # India Gate
+        ('Rapid Response Unit 2',  'police',    '+91-9876543230', 28.5355, 77.2710),  # Nehru Place
+        ('Night Patrol Team',      'police',    '+91-9876543231', 28.6508, 77.3140),  # Laxmi Nagar
+        ('Women Safety Squad',     'police',    '+91-9876543232', 28.7041, 77.1025),  # Rohini
+        # Volunteers — Delhi + NCR
+        ('Volunteer Anjali Patel', 'volunteer', '+91-9876543215', 28.4595, 77.0266),  # Gurgaon Sec 29
+        ('Volunteer Rohan Gupta',  'volunteer', '+91-9876543216', 28.5706, 77.3260),  # Noida Sec 18
+        ('Volunteer Neha Reddy',   'volunteer', '+91-9876543217', 28.6282, 77.2219),  # Lajpat Nagar
+        ('Volunteer Arjun Nair',   'volunteer', '+91-9876543218', 28.7501, 77.1175),  # Narela
+        ('Volunteer Simran Kaur',  'volunteer', '+91-9876543219', 28.4817, 77.0714),  # Gurgaon DLF Phase 3
+        ('Volunteer Vikram Rao',   'volunteer', '+91-9876543220', 28.6289, 77.0817),  # Janakpuri
+        ('Volunteer Pooja Joshi',  'volunteer', '+91-9876543221', 28.5562, 77.1000),  # Vasant Kunj
+        ('Community Helper Ravi',  'volunteer', '+91-9876543227', 28.6852, 77.2217),  # Chandni Chowk
+        ('Community Helper Meera', 'volunteer', '+91-9876543228', 28.5535, 77.3345),  # Noida Sec 62
+        ('Crisis Support Unit',    'volunteer', '+91-9876543234', 28.4089, 77.3178),  # Greater Noida
+        # Medical — hospitals across Delhi-NCR
+        ('Ambulance Unit 1',       'medical',   '+91-9876543222', 28.5672, 77.2100),  # AIIMS area
+        ('Ambulance Unit 2',       'medical',   '+91-9876543223', 28.6139, 77.2090),  # RML Hospital
+        ('Ambulance Unit 3',       'medical',   '+91-9876543224', 28.7040, 77.1020),  # Rohini Hospital
+        ('Emergency Response Team','medical',   '+91-9876543233', 28.4744, 77.0720),  # Medanta Gurgaon
+        # Security
+        ('Security Team Alpha',    'security',  '+91-9876543225', 28.5245, 77.1855),  # Vasant Vihar
+        ('Security Team Beta',     'security',  '+91-9876543226', 28.6351, 77.2896),  # Mayur Vihar
     ]
     
-    # Generate responders with varying locations around Delhi
     responders = []
-    base_lat = 28.6139
-    base_lon = 77.2090
-    
-    for i, (name, resp_type, phone) in enumerate(responder_names):
-        # Spread responders in a 5km radius
-        lat_offset = (i % 5 - 2) * 0.01  # ~1km per 0.01 degree
-        lon_offset = ((i // 5) % 5 - 2) * 0.01
-        
+    for name, resp_type, phone, lat, lon in responder_data:
         responder = Responder(
             responder_id=f'R{str(uuid.uuid4())[:8]}',
             name=name,
             type=resp_type,
             phone=phone,
-            latitude=base_lat + lat_offset,
-            longitude=base_lon + lon_offset,
+            latitude=lat,
+            longitude=lon,
             is_available=True
         )
         responders.append(responder)
-    
-    for responder in responders:
         session.add(responder)
     
-    # Add demo mesh nodes
-    nodes = [
-        MeshNode(
-            node_id=f'N{str(uuid.uuid4())[:8]}',
-            node_type='smart_pole',
-            latitude=28.6139,
-            longitude=77.2090,
-            is_active=True
-        ),
-        MeshNode(
-            node_id=f'N{str(uuid.uuid4())[:8]}',
-            node_type='bus',
-            latitude=28.6149,
-            longitude=77.2100,
-            is_active=True
-        )
+    # Mesh nodes spread across Delhi-NCR
+    mesh_node_data = [
+        ('smart_pole', 28.6328, 77.2197),  # CP
+        ('smart_pole', 28.6127, 77.2310),  # India Gate
+        ('smart_pole', 28.5672, 77.2100),  # Saket
+        ('smart_pole', 28.6920, 77.1510),  # Pitampura
+        ('smart_pole', 28.6508, 77.3140),  # Laxmi Nagar
+        ('smart_pole', 28.7041, 77.1025),  # Rohini
+        ('bus',        28.5918, 77.0463),  # Dwarka route
+        ('bus',        28.6282, 77.2219),  # Lajpat Nagar route
+        ('bus',        28.6562, 77.2315),  # Karol Bagh route
+        ('bus',        28.5355, 77.2710),  # Nehru Place route
+        ('lora',       28.4595, 77.0266),  # Gurgaon
+        ('lora',       28.5706, 77.3260),  # Noida
+        ('lora',       28.4089, 77.3178),  # Greater Noida
+        ('beacon',     28.6852, 77.2217),  # Chandni Chowk
+        ('beacon',     28.5562, 77.1000),  # Vasant Kunj
     ]
     
-    for node in nodes:
+    for node_type, lat, lon in mesh_node_data:
+        node = MeshNode(
+            node_id=f'N{str(uuid.uuid4())[:8]}',
+            node_type=node_type,
+            latitude=lat,
+            longitude=lon,
+            is_active=True
+        )
         session.add(node)
 
-    # Add demo danger zones
+    # Danger zones at real known problem areas across Delhi-NCR
     demo_zones = [
-        DangerZone(
-            zone_id=str(uuid.uuid4()),
-            latitude=28.6200,
-            longitude=77.2150,
-            category='poor_lighting',
-            description='Unlit stretch near park',
-            report_count=5,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
-        ),
-        DangerZone(
-            zone_id=str(uuid.uuid4()),
-            latitude=28.6080,
-            longitude=77.2050,
-            category='harassment',
-            description='Known harassment spot',
-            report_count=8,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
-        ),
-        DangerZone(
-            zone_id=str(uuid.uuid4()),
-            latitude=28.6170,
-            longitude=77.1980,
-            category='isolated',
-            description='Isolated road, few passersby',
-            report_count=3,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
-        ),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.6200, longitude=77.2150,
+                   category='poor_lighting', description='Unlit stretch near Lodhi Garden',
+                   report_count=5, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.6080, longitude=77.2050,
+                   category='harassment', description='INA Market underpass — known harassment spot',
+                   report_count=8, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.6170, longitude=77.1980,
+                   category='isolated', description='Isolated stretch near Dhaula Kuan',
+                   report_count=3, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.5355, longitude=77.2710,
+                   category='poor_lighting', description='Nehru Place flyover — poorly lit at night',
+                   report_count=6, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.5918, longitude=77.0463,
+                   category='isolated', description='Dwarka Sec 10 — isolated road near metro station',
+                   report_count=4, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.6508, longitude=77.3140,
+                   category='harassment', description='Laxmi Nagar market area after 9 PM',
+                   report_count=7, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.4595, longitude=77.0266,
+                   category='crime_prone', description='Gurgaon Sec 29 underpass — crime-prone area',
+                   report_count=9, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
+        DangerZone(zone_id=str(uuid.uuid4()), latitude=28.6852, longitude=77.2217,
+                   category='harassment', description='Old Delhi lanes — crowded and unsafe for women at night',
+                   report_count=11, expires_at=datetime.now(timezone.utc) + timedelta(days=30)),
     ]
     for zone in demo_zones:
         session.add(zone)
 
+    # Add a demo user and 2 pre-seeded alerts so dashboard is populated for judges
+    demo_user = User(
+        ephemeral_id=f'DEMO_{str(uuid.uuid4())[:8]}',
+        name='Demo User (Priya)',
+        phone='+91-9999000001',
+        emergency_contacts=json.dumps([
+            {'name': 'Mom', 'phone': '+91-9999000002'},
+            {'name': 'Sister', 'phone': '+91-9999000003'}
+        ])
+    )
+    session.add(demo_user)
+    session.flush()  # get demo_user.id
+
+    # Alert 1: resolved alert (shows history)
+    alert1 = Alert(
+        alert_id=str(uuid.uuid4()),
+        user_id=demo_user.id,
+        status=AlertStatus.RESOLVED,
+        threat_level=ThreatLevel.HIGH,
+        trigger_method='button',
+        latitude=28.6250,
+        longitude=77.2180,
+        ai_risk_score=0.72,
+        ai_confidence=0.82,
+        ai_factors=json.dumps({'time_risk': 1.3, 'trigger_risk': 0.7, 'location_risk': 0.7, 'pattern_risk': 0.5, 'overall_risk_score': 0.72}),
+        trigger_context=json.dumps({'area': 'Connaught Place'}),
+        response_time_seconds=142,
+        triggered_at=datetime.now(timezone.utc) - timedelta(hours=2),
+        resolved_at=datetime.now(timezone.utc) - timedelta(hours=1, minutes=57),
+        auto_purge_at=datetime.now(timezone.utc) + timedelta(hours=46)
+    )
+    session.add(alert1)
+
+    # Alert 2: active dispatched alert (shows live dashboard in action)
+    # Assign the first available responder
+    first_responder = responders[0] if responders else None
+    alert2_id = str(uuid.uuid4())
+    alert2 = Alert(
+        alert_id=alert2_id,
+        user_id=demo_user.id,
+        status=AlertStatus.DISPATCHED,
+        threat_level=ThreatLevel.CRITICAL,
+        trigger_method='shake',
+        latitude=28.6139,
+        longitude=77.2090,
+        ai_risk_score=0.88,
+        ai_confidence=0.92,
+        ai_factors=json.dumps({'time_risk': 1.5, 'trigger_risk': 0.8, 'location_risk': 0.7, 'pattern_risk': 0.7, 'in_danger_zone': True, 'danger_zone_boost': 0.15, 'overall_risk_score': 0.88}),
+        trigger_context=json.dumps({'area': 'Karol Bagh'}),
+        dispatched_at=datetime.now(timezone.utc) - timedelta(minutes=3),
+        triggered_at=datetime.now(timezone.utc) - timedelta(minutes=4),
+        auto_purge_at=datetime.now(timezone.utc) + timedelta(hours=48)
+    )
+    if first_responder:
+        alert2.assigned_responders = json.dumps([first_responder.responder_id])
+        first_responder.is_available = False
+        first_responder.current_alert_id = alert2_id
+    session.add(alert2)
+
     session.commit()
     session.close()
 
-    print(f'Demo data initialized: {len(responders)} responders added')
+    print(f'Demo data initialized: {len(responders)} responders, 2 pre-seeded alerts added')
 
 
 
@@ -1236,6 +1348,26 @@ timer_thread = threading.Thread(target=check_timers, daemon=True)
 timer_thread.start()
 
 
+def refresh_danger_zones_cache():
+    """Keep AI engine updated with latest danger zones"""
+    import time as _time
+    while True:
+        try:
+            sess = get_session(engine)
+            zones = sess.query(DangerZone).filter_by(is_active=True).all()
+            zone_list = [{'latitude': z.latitude, 'longitude': z.longitude,
+                          'radius_meters': z.radius_meters, 'category': z.category} for z in zones]
+            threat_engine.update_danger_zones(zone_list)
+            sess.close()
+        except Exception:
+            pass
+        _time.sleep(60)
+
+
+dz_thread = threading.Thread(target=refresh_danger_zones_cache, daemon=True)
+dz_thread.start()
+
+
 @app.route('/api/evidence', methods=['POST', 'OPTIONS'])
 def upload_evidence():
     """Receive audio evidence from mobile client"""
@@ -1293,13 +1425,24 @@ def simulate_sos():
             session.add(demo_user)
             session.commit()
 
-        # Delhi locations for demo
+        # Delhi-NCR locations for demo — spread across entire region
         import random
         demo_locations = [
             (28.6282, 77.2219, 'Lajpat Nagar'),
             (28.5245, 77.2066, 'Saket Metro'),
             (28.5921, 77.0460, 'Dwarka Sector 10'),
             (28.6517, 77.2219, 'Karol Bagh'),
+            (28.6127, 77.2310, 'India Gate'),
+            (28.6852, 77.2217, 'Chandni Chowk'),
+            (28.5355, 77.2710, 'Nehru Place'),
+            (28.7041, 77.1025, 'Rohini Sector 7'),
+            (28.6508, 77.3140, 'Laxmi Nagar'),
+            (28.4595, 77.0266, 'Gurgaon Sector 29'),
+            (28.5706, 77.3260, 'Noida Sector 18'),
+            (28.6920, 77.1510, 'Pitampura'),
+            (28.5562, 77.1000, 'Vasant Kunj'),
+            (28.4817, 77.0714, 'DLF Phase 3 Gurgaon'),
+            (28.4089, 77.3178, 'Greater Noida'),
         ]
         lat, lon, area = random.choice(demo_locations)
         lat += random.uniform(-0.003, 0.003)
@@ -1349,6 +1492,7 @@ def simulate_sos():
 
         # Auto-dispatch nearest responder
         nearby = find_nearby_responders(session, lat, lon)
+        dispatched_responder = None
         if nearby:
             nearest = nearby[0]
             nearest.is_available = False
@@ -1357,11 +1501,30 @@ def simulate_sos():
             alert.status = AlertStatus.DISPATCHED
             alert.dispatched_at = datetime.now(timezone.utc)
             session.commit()
+            dispatched_responder = nearest.to_dict()
             socketio.emit('alert_status_changed', {
                 'alert_id': alert_id,
                 'status': 'dispatched',
-                'responder': nearest.to_dict()
+                'responder': dispatched_responder
             })
+
+        # Auto system chat messages
+        sys_msg = ChatMessage(
+            alert_id=alert_id, sender_type='system', sender_name='NaariRakshak',
+            message=f'🚨 SOS triggered via {trigger_method} near {area}. Threat: {threat_level.upper()}. AI confidence: {int(confidence*100)}%.'
+        )
+        session.add(sys_msg)
+        session.commit()
+        socketio.emit('new_chat_message', sys_msg.to_dict())
+
+        if dispatched_responder:
+            d_msg = ChatMessage(
+                alert_id=alert_id, sender_type='system', sender_name='NaariRakshak',
+                message=f'✅ Auto-dispatched {dispatched_responder["name"]} ({dispatched_responder["type"]}).'
+            )
+            session.add(d_msg)
+            session.commit()
+            socketio.emit('new_chat_message', d_msg.to_dict())
 
         session.close()
         return jsonify({'message': 'Demo SOS simulated', 'alert': alert_dict, 'area': area}), 201
