@@ -374,7 +374,13 @@ def get_alerts():
         query = session.query(Alert)
         
         if status:
-            query = query.filter_by(status=AlertStatus[status.upper()])
+            if status.upper() == 'ACTIVE':
+                query = query.filter(Alert.status.in_([
+                    AlertStatus.TRIGGERED, AlertStatus.ACKNOWLEDGED,
+                    AlertStatus.DISPATCHED, AlertStatus.RESPONDING
+                ]))
+            else:
+                query = query.filter_by(status=AlertStatus[status.upper()])
         
         alerts = query.order_by(Alert.triggered_at.desc()).limit(limit).all()
         
