@@ -3,56 +3,67 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#E53935">
+  <meta name="theme-color" content="#0A0A1A">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NaariRakshak Volunteer">
-  <title>NaariRakshak — Volunteer</title>
+  <title>NaariRakshak — Volunteer Response</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* ─── Reset & Base ─────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════════════════════ */
+    :root {
+      --red:          #E53935;
+      --red-dark:     #B71C1C;
+      --red-mid:      #D32F2F;
+      --red-bright:   #FF5252;
+      --red-light:    #FFEBEE;
+      --purple:       #7B1FA2;
+      --purple-dark:  #6A1B9A;
+      --purple-light: #F3E5F5;
+      --green:        #2E7D32;
+      --green-light:  #E8F5E9;
+      --orange:       #FF6F00;
+      --orange-light: #FFF3E0;
+      --yellow:       #F9A825;
+      --bg:           #FAFAFA;
+      --card:         #FFFFFF;
+      --border:       #EEEEEE;
+      --text:         #212121;
+      --text-2:       #616161;
+      --text-3:       #9E9E9E;
+      --dark-hdr:     #0A0A1A;
+      --dark-card:    #13132A;
+      --dark-border:  rgba(255,255,255,0.08);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESET + BASE
+    ═══════════════════════════════════════════════════════ */
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
       -webkit-tap-highlight-color: transparent;
     }
-
-    :root {
-      --red:        #E53935;
-      --red-dark:   #D32F2F;
-      --red-light:  #FFEBEE;
-      --purple:     #7B1FA2;
-      --purple-dark:#6A1B9A;
-      --purple-light:#F3E5F5;
-      --green:      #2E7D32;
-      --green-light:#E8F5E9;
-      --orange:     #FF6F00;
-      --orange-light:#FFF3E0;
-      --yellow:     #F9A825;
-      --bg:         #FAFAFA;
-      --card:       #FFFFFF;
-      --border:     #EEEEEE;
-      --text:       #212121;
-      --text-2:     #616161;
-      --text-3:     #9E9E9E;
-      --radius:     14px;
-      --shadow:     0 2px 12px rgba(0,0,0,0.08);
-      --shadow-lg:  0 6px 24px rgba(0,0,0,0.12);
-    }
-
     html, body {
       height: 100%;
       background: var(--bg);
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       color: var(--text);
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
     }
 
-    /* ─── App Shell ─────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       APP SHELL
+    ═══════════════════════════════════════════════════════ */
     #app {
-      max-width: 390px;
+      max-width: 430px;
       min-height: 100vh;
       margin: 0 auto;
       display: flex;
@@ -62,7 +73,9 @@
       overflow: hidden;
     }
 
-    /* ─── Loading Overlay ────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       LOADING OVERLAY
+    ═══════════════════════════════════════════════════════ */
     #loading-overlay {
       position: fixed;
       inset: 0;
@@ -73,426 +86,771 @@
       justify-content: center;
       z-index: 9999;
       color: #fff;
-      gap: 18px;
-      transition: opacity 0.4s ease;
+      gap: 0;
+      transition: opacity 0.5s ease, transform 0.5s ease;
     }
     #loading-overlay.hidden {
       opacity: 0;
+      transform: scale(1.04);
       pointer-events: none;
     }
-    .loading-logo { font-size: 72px; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.3)); }
-    .loading-title { font-family: 'Poppins', sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
-    .loading-sub { font-size: 14px; opacity: 0.75; letter-spacing: 0.3px; }
+    .lo-glow {
+      position: absolute;
+      top: -120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+      animation: glowPulse 3s ease-in-out infinite;
+    }
+    @keyframes glowPulse {
+      0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.8; }
+      50%       { transform: translateX(-50%) scale(1.15); opacity: 1; }
+    }
+    .lo-shield-wrap {
+      position: relative;
+      margin-bottom: 24px;
+    }
+    .lo-shield {
+      font-size: 84px;
+      display: block;
+      filter: drop-shadow(0 0 32px rgba(255,255,255,0.5)) drop-shadow(0 4px 20px rgba(0,0,0,0.3));
+      animation: shieldFloat 3s ease-in-out infinite;
+    }
+    @keyframes shieldFloat {
+      0%, 100% { transform: translateY(0px); }
+      50%       { transform: translateY(-8px); }
+    }
+    .lo-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 6px;
+    }
+    .lo-sub {
+      font-size: 13px;
+      opacity: 0.75;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 500;
+      margin-bottom: 40px;
+    }
+    .lo-spinner-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0.7;
+    }
     .spinner {
-      width: 36px; height: 36px;
-      border: 3px solid rgba(255,255,255,0.3);
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
       border-top-color: #fff;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
+    .lo-spinner-text {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      opacity: 0.85;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ─── Views ──────────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       VIEWS
+    ═══════════════════════════════════════════════════════ */
     .view {
       display: none;
       flex: 1;
       flex-direction: column;
-      animation: slideIn 0.25s ease;
+      animation: viewIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
       overflow: hidden;
     }
     .view.active { display: flex; }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(12px); }
+    @keyframes viewIn {
+      from { opacity: 0; transform: translateY(16px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* ─── Scrollable Content ─────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       SCROLL AREA
+    ═══════════════════════════════════════════════════════ */
     .scroll-area {
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       padding: 16px;
-      padding-bottom: max(80px, calc(env(safe-area-inset-bottom) + 80px));
+      padding-bottom: max(90px, calc(env(safe-area-inset-bottom) + 90px));
+    }
+    .scroll-area::-webkit-scrollbar { display: none; }
+
+    /* ═══════════════════════════════════════════════════════
+       ▌ VIEW 1: LOGIN
+    ═══════════════════════════════════════════════════════ */
+    #view-login {
+      background: var(--dark-hdr);
+      min-height: 100vh;
     }
 
-    /* ─── Header Bar ─────────────────────────────────────── */
-    .top-bar {
-      background: #fff;
-      padding: 16px 18px;
-      padding-top: max(16px, env(safe-area-inset-top));
+    /* Radial glow backdrop */
+    .login-bg {
+      position: absolute;
+      top: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(ellipse at center, rgba(229,57,53,0.25) 0%, transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .login-inner {
+      position: relative;
+      z-index: 1;
       display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 0 20px 40px;
+      padding-top: max(60px, calc(env(safe-area-inset-top) + 40px));
       align-items: center;
-      justify-content: space-between;
-      border-bottom: 2px solid var(--border);
-      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
-      flex-shrink: 0;
     }
-    .top-bar-title {
-      font-family: 'Poppins', sans-serif;
-      font-size: 17px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .top-bar-subtitle { font-size: 11px; color: var(--text-3); margin-top: 1px; font-weight: 500; }
-    .top-bar-right { display: flex; gap: 8px; align-items: center; }
 
-    /* ─── Alert Header (active alert view) ──────────────── */
-    .alert-header {
-      background: linear-gradient(135deg, #C62828 0%, var(--red) 60%, #D32F2F 100%);
+    .login-logo-area {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .login-shield {
+      font-size: 72px;
+      display: block;
+      filter: drop-shadow(0 0 24px rgba(229,57,53,0.6));
+      margin-bottom: 14px;
+      animation: shieldFloat 3s ease-in-out infinite;
+    }
+    .login-app-name {
+      font-family: 'Poppins', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
       color: #fff;
-      padding: 18px;
-      padding-top: max(18px, env(safe-area-inset-top));
-      flex-shrink: 0;
-      box-shadow: 0 4px 20px rgba(229,57,53,0.5);
+      letter-spacing: -1px;
+      line-height: 1;
     }
-    .alert-header-label {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1.2px;
-      opacity: 0.85;
+    .login-tagline {
+      font-size: 12px;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 2.5px;
       text-transform: uppercase;
+      margin-top: 6px;
+      font-weight: 600;
     }
-    .alert-header-id {
+
+    /* White login card */
+    .login-card {
+      background: #FFFFFF;
+      border-radius: 28px;
+      padding: 32px 28px;
+      width: 100%;
+      max-width: 390px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .login-card-title {
       font-family: 'Poppins', sans-serif;
       font-size: 20px;
-      font-weight: 800;
-      margin-top: 4px;
-      letter-spacing: -0.5px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 24px;
     }
-    .alert-header-sub { font-size: 13px; opacity: 0.9; margin-top: 2px; }
 
-    /* ─── Cards ──────────────────────────────────────────── */
-    .card {
-      background: var(--card);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      padding: 16px;
-      margin-bottom: 12px;
-      box-shadow: var(--shadow);
-    }
-    .card-title {
-      font-size: 13px;
-      font-weight: 600;
+    /* Form elements */
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
       color: var(--text-2);
+      margin-bottom: 8px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
+      letter-spacing: 0.8px;
     }
+    .form-input {
+      width: 100%;
+      padding: 15px 18px;
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      font-size: 16px;
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      background: #FAFAFA;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--red);
+      box-shadow: 0 0 0 4px rgba(229,57,53,0.1);
+      background: #fff;
+    }
+    .form-input::placeholder { color: var(--text-3); }
 
-    /* ─── Buttons ────────────────────────────────────────── */
+    /* Segmented responder type control */
+    .responder-seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .seg-option { display: none; }
+    .seg-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 12px 6px;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      background: #FAFAFA;
+      cursor: pointer;
+      transition: all 0.18s;
+      text-align: center;
+    }
+    .seg-label:hover { border-color: rgba(229,57,53,0.3); }
+    .seg-icon { font-size: 22px; line-height: 1; }
+    .seg-text { font-size: 11px; font-weight: 700; color: var(--text-2); letter-spacing: 0.2px; }
+    .seg-option:checked + .seg-label {
+      border-color: var(--red);
+      background: var(--red-light);
+      box-shadow: 0 0 0 3px rgba(229,57,53,0.12);
+    }
+    .seg-option:checked + .seg-label .seg-text { color: var(--red-dark); }
+
+    /* Login button */
+    .btn-login {
+      width: 100%;
+      height: 56px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #EF5350 0%, #E53935 50%, #C62828 100%);
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(229,57,53,0.45);
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+      letter-spacing: 0.3px;
+    }
+    .btn-login:active { transform: scale(0.97); box-shadow: 0 4px 12px rgba(229,57,53,0.4); }
+    .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+    .login-privacy {
+      text-align: center;
+      margin-top: 14px;
+      font-size: 11px;
+      color: var(--text-3);
+      line-height: 1.5;
+    }
+    .login-privacy span { opacity: 0.7; }
+
+    /* ═══════════════════════════════════════════════════════
+       GENERAL BUTTONS
+    ═══════════════════════════════════════════════════════ */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 7px;
       border: none;
       border-radius: 14px;
       font-family: 'Inter', sans-serif;
       font-size: 15px;
       font-weight: 700;
       cursor: pointer;
-      transition: transform 0.12s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s ease, opacity 0.12s ease;
+      transition: transform 0.12s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s ease;
       padding: 14px 20px;
       line-height: 1;
       text-decoration: none;
       white-space: nowrap;
-      letter-spacing: 0.2px;
     }
-    .btn:active { transform: scale(0.95); }
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .btn:active { transform: scale(0.96); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
     .btn-full { width: 100%; display: flex; }
+
     .btn-red {
-      background: linear-gradient(135deg, #EF5350, var(--red) 50%, #C62828);
+      background: linear-gradient(135deg, #EF5350 0%, var(--red) 50%, #C62828 100%);
       color: #fff;
-      box-shadow: 0 4px 16px rgba(229,57,53,0.45);
+      box-shadow: 0 4px 20px rgba(229,57,53,0.45);
+      font-family: 'Poppins', sans-serif;
     }
-    .btn-red:hover { box-shadow: 0 6px 20px rgba(229,57,53,0.5); }
-    .btn-red:active { box-shadow: 0 2px 6px rgba(229,57,53,0.25); }
-    .btn-purple {
-      background: linear-gradient(135deg, #9C27B0, var(--purple) 50%, #4A148C);
-      color: #fff;
-      box-shadow: 0 4px 16px rgba(123,31,162,0.4);
-    }
-    .btn-purple:hover { box-shadow: 0 6px 20px rgba(123,31,162,0.5); }
-    .btn-green {
-      background: linear-gradient(135deg, #4CAF50, var(--green) 50%, #1B5E20);
-      color: #fff;
-      box-shadow: 0 4px 16px rgba(46,125,50,0.4);
-    }
-    .btn-green:hover { box-shadow: 0 6px 20px rgba(46,125,50,0.5); }
-    .btn-green-lg {
-      font-size: 20px;
-      padding: 22px 20px;
-      border-radius: 18px;
-      box-shadow: 0 8px 24px rgba(46,125,50,0.4);
-    }
+    .btn-red:active { box-shadow: 0 2px 8px rgba(229,57,53,0.3); }
+
     .btn-ghost {
       background: #fff;
       color: var(--text-2);
       border: 1.5px solid var(--border);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
-    .btn-ghost:active { background: #f5f5f5; }
-    .btn-sm {
-      font-size: 13px;
-      padding: 9px 14px;
-      border-radius: 9px;
-    }
-    .btn-icon { padding: 10px; border-radius: 10px; }
+    .btn-ghost:active { background: #F5F5F5; }
 
-    /* ─── Form Elements ──────────────────────────────────── */
-    .form-group { margin-bottom: 16px; }
-    .form-label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-2);
-      margin-bottom: 7px;
-    }
-    .form-input,
-    .form-select {
-      width: 100%;
-      padding: 14px 16px;
-      border: 1.5px solid var(--border);
-      border-radius: 12px;
-      font-size: 16px;
-      font-family: inherit;
-      color: var(--text);
-      background: #fff;
-      outline: none;
-      transition: border-color 0.2s;
-      appearance: none;
-      -webkit-appearance: none;
-    }
-    .form-input:focus,
-    .form-select:focus { border-color: var(--red); }
-    .form-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23757575' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 40px; }
-
-    /* ─── Badges / Pills ─────────────────────────────────── */
-    .badge {
-      display: inline-block;
-      border-radius: 100px;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 10px;
-      letter-spacing: 0.3px;
-      white-space: nowrap;
-    }
-    .badge-green { background: var(--green-light); color: var(--green); }
-    .badge-red   { background: var(--red-light);   color: var(--red-dark); }
-    .badge-orange{ background: var(--orange-light); color: var(--orange); }
-    .badge-yellow{ background: #FFFDE7;             color: #F9A825; }
-    .badge-purple{ background: var(--purple-light); color: var(--purple); }
-    .badge-pulse { animation: badgePulse 1.4s ease infinite; }
-    @keyframes badgePulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.6; }
+    .btn-green {
+      background: linear-gradient(135deg, #43A047, var(--green) 60%, #1B5E20);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(46,125,50,0.4);
     }
 
-    /* ─── Divider ────────────────────────────────────────── */
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 14px 0;
-    }
+    .btn-sm { font-size: 13px; padding: 9px 14px; border-radius: 10px; }
 
-    /* ─── Bottom Navigation ──────────────────────────────── */
-    .bottom-nav {
-      position: fixed;
-      bottom: 0;
+    /* ═══════════════════════════════════════════════════════
+       ▌ VIEW 2: SHIFT CHECK-IN
+    ═══════════════════════════════════════════════════════ */
+    #view-shift { background: var(--bg); }
+
+    .shift-topbar {
+      background: var(--dark-hdr);
+      padding: 18px 20px;
+      padding-top: max(18px, calc(env(safe-area-inset-top) + 14px));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .shift-topbar-brand {
+      font-family: 'Poppins', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+    .shift-topbar-brand span { color: var(--red); }
+
+    .shift-hero-card {
+      background: linear-gradient(135deg, #0A0A1A 0%, #1a0a2e 100%);
+      margin: 16px;
+      border-radius: 20px;
+      padding: 28px;
+      text-align: center;
+      border: 1px solid rgba(229,57,53,0.2);
+      position: relative;
+      overflow: hidden;
+    }
+    .shift-hero-card::before {
+      content: '';
+      position: absolute;
+      top: -60px;
       left: 50%;
       transform: translateX(-50%);
-      width: 100%;
-      max-width: 390px;
-      background: #fff;
-      border-top: 1px solid var(--border);
-      display: flex;
-      justify-content: space-around;
-      padding: 10px 0;
-      padding-bottom: max(10px, env(safe-area-inset-bottom));
-      z-index: 100;
-      box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
-    }
-    .nav-tab {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--text-3);
-      cursor: pointer;
-      padding: 2px 16px;
-      border-radius: 10px;
-      border: none;
-      background: none;
-      transition: color 0.15s;
-    }
-    .nav-tab .nav-icon { font-size: 22px; }
-    .nav-tab.active { color: var(--red); }
-
-    /* ─── Login View ─────────────────────────────────────── */
-    #view-login {
-      background: linear-gradient(170deg, #fff 0%, #FAFAFA 100%);
-      min-height: 100vh;
-    }
-    .login-hero {
-      background: linear-gradient(145deg, var(--red) 0%, var(--purple) 100%);
-      padding: 52px 28px 40px;
-      text-align: center;
-      color: #fff;
-    }
-    .login-logo { font-size: 72px; margin-bottom: 12px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25)); }
-    .login-app-name { font-family: 'Poppins', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
-    .login-portal  { font-size: 13px; opacity: 0.8; margin-top: 4px; letter-spacing: 1.2px; text-transform: uppercase; }
-    .login-form-wrap { padding: 28px 20px 40px; }
-    .login-form-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: var(--text); }
-
-    /* ─── Shift View ─────────────────────────────────────── */
-    .shift-hero {
-      background: linear-gradient(135deg, #E8F5E9 0%, #F3E5F5 100%);
-      border-radius: var(--radius);
-      padding: 24px;
-      text-align: center;
-      margin-bottom: 16px;
+      width: 240px;
+      height: 240px;
+      background: radial-gradient(circle, rgba(229,57,53,0.2) 0%, transparent 65%);
     }
     .shift-avatar {
-      width: 72px; height: 72px;
+      width: 80px;
+      height: 80px;
       border-radius: 50%;
       background: linear-gradient(135deg, var(--red), var(--purple));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 32px;
-      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      margin: 0 auto 16px;
+      box-shadow: 0 0 0 4px rgba(229,57,53,0.2);
+      position: relative;
+      z-index: 1;
     }
-    .shift-name  { font-size: 20px; font-weight: 700; color: var(--text); }
-    .shift-type  { font-size: 13px; color: var(--text-2); margin-top: 4px; }
-    .stat-row    { display: flex; gap: 10px; }
-    .stat-card   {
+    .shift-name {
+      font-family: 'Poppins', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      position: relative;
+      z-index: 1;
+    }
+    .shift-type-label {
+      font-size: 13px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 4px;
+      position: relative;
+      z-index: 1;
+    }
+    .shift-badge-wrap {
+      margin-top: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .stat-row { display: flex; gap: 10px; margin: 0 16px 16px; }
+    .stat-card {
       flex: 1;
       background: #fff;
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 12px;
+      border-radius: 14px;
+      padding: 16px 10px;
       text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
-    .stat-num    { font-size: 26px; font-weight: 800; color: var(--red); }
-    .stat-label  { font-size: 11px; color: var(--text-3); margin-top: 2px; font-weight: 500; }
+    .stat-num {
+      font-family: 'Poppins', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--red);
+      line-height: 1;
+    }
+    .stat-label { font-size: 11px; color: var(--text-3); margin-top: 4px; font-weight: 600; }
 
-    /* ─── Alert Feed ─────────────────────────────────────── */
-    .feed-header {
-      background: #fff;
-      padding: 14px 18px 12px;
-      padding-top: max(14px, env(safe-area-inset-top));
-      border-bottom: 1px solid var(--border);
+    .location-status-card {
+      margin: 0 16px 16px;
+      background: var(--green-light);
+      border: 1.5px solid rgba(46,125,50,0.3);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .loc-icon { font-size: 20px; flex-shrink: 0; }
+    .loc-text { font-size: 13px; font-weight: 600; color: var(--green); }
+
+    .shift-cta-wrap { padding: 0 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+    .btn-start-shift {
+      width: 100%;
+      height: 60px;
+      border: none;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #43A047, var(--green) 60%, #1B5E20);
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 28px rgba(46,125,50,0.4);
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-start-shift:active { transform: scale(0.97); box-shadow: 0 4px 14px rgba(46,125,50,0.35); }
+
+    /* ═══════════════════════════════════════════════════════
+       ▌ VIEW 3: ALERT FEED
+    ═══════════════════════════════════════════════════════ */
+    #view-feed { background: var(--bg); }
+
+    /* Feed Top Bar */
+    .feed-topbar {
+      background: var(--dark-hdr);
+      padding: 14px 18px;
+      padding-top: max(14px, calc(env(safe-area-inset-top) + 10px));
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .feed-volunteer-name {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text);
+    .feed-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .feed-section-title {
+    .feed-brand-shield { font-size: 22px; }
+    .feed-brand-name {
+      font-family: 'Poppins', sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+    .feed-brand-name span { color: var(--red); }
+    .feed-status-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .online-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #2E7D32;
+      box-shadow: 0 0 0 3px rgba(46,125,50,0.25);
+      animation: online-pulse 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .online-dot.offline {
+      background: var(--red);
+      box-shadow: 0 0 0 3px rgba(229,57,53,0.25);
+      animation: none;
+    }
+    @keyframes online-pulse {
+      0%, 100% { box-shadow: 0 0 0 3px rgba(46,125,50,0.25); }
+      50%       { box-shadow: 0 0 0 7px rgba(46,125,50,0.08); }
+    }
+    .online-label {
       font-size: 12px;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--text-3);
-      margin-bottom: 12px;
+      color: #4CAF50;
+      letter-spacing: 0.3px;
     }
+    .online-label.offline { color: var(--red); }
+
+    /* Volunteer status card under topbar */
+    .vol-status-card {
+      background: var(--dark-card);
+      margin: 0;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+    .vol-info { display: flex; align-items: center; gap: 10px; }
+    .vol-avatar-sm {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--red), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .vol-name-text {
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.2;
+    }
+    .vol-type-text {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      margin-top: 2px;
+    }
+    .vol-available-pill {
+      background: rgba(46,125,50,0.2);
+      color: #4CAF50;
+      border: 1px solid rgba(46,125,50,0.3);
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+    }
+    .vol-shift-time {
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+      margin-top: 2px;
+    }
+
+    /* Alerts section */
+    .feed-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .feed-section-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-2);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .alert-count-badge {
+      background: var(--red);
+      color: #fff;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      min-width: 22px;
+      text-align: center;
+    }
+
+    /* Empty State */
     .empty-state {
       text-align: center;
-      padding: 52px 20px;
+      padding: 56px 20px;
     }
-    .empty-state-icon { font-size: 56px; margin-bottom: 12px; }
-    .empty-state-text { font-size: 15px; color: var(--text-2); font-weight: 500; }
-    .empty-state-sub  { font-size: 13px; color: var(--text-3); margin-top: 6px; }
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      display: block;
+      opacity: 0.7;
+    }
+    .empty-state-text {
+      font-family: 'Poppins', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .empty-state-sub {
+      font-size: 13px;
+      color: var(--text-3);
+      line-height: 1.5;
+      max-width: 260px;
+      margin: 0 auto;
+    }
 
-    /* ─── Alert Card ─────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       ALERT CARD — Redesigned
+    ═══════════════════════════════════════════════════════ */
     .alert-card {
-      background: #fff;
-      border-radius: var(--radius);
+      background: var(--card);
+      border-radius: 18px;
       border: 1px solid var(--border);
-      margin-bottom: 14px;
+      margin-bottom: 16px;
       overflow: hidden;
-      box-shadow: var(--shadow);
-      animation: cardIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      animation: cardIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
       transition: box-shadow 0.2s, transform 0.15s;
+      position: relative;
     }
-    .alert-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    .alert-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.12); transform: translateY(-2px); }
     @keyframes cardIn {
-      from { opacity: 0; transform: scale(0.94) translateY(12px); }
+      from { opacity: 0; transform: scale(0.93) translateY(16px); }
       to   { opacity: 1; transform: scale(1) translateY(0); }
     }
-    .alert-card.skipped { display: none; }
+    .alert-card.skipped { display: none !important; }
 
-    /* Colored top stripe by threat level */
+    /* Colored top stripe */
     .alert-card::before {
       content: '';
       display: block;
-      height: 4px;
+      height: 5px;
       width: 100%;
+      background-size: 200% 100%;
     }
-    .alert-card.tc-critical::before { background: linear-gradient(90deg, #D32F2F, #FF5252, #D32F2F); }
-    .alert-card.tc-high::before     { background: linear-gradient(90deg, #E53935, #FF6B6B, #E53935); }
-    .alert-card.tc-moderate::before { background: linear-gradient(90deg, #FF6F00, #FFAB40, #FF6F00); }
-    .alert-card.tc-low::before      { background: linear-gradient(90deg, #F9A825, #FFF176, #F9A825); }
+    .alert-card.tc-critical::before {
+      background: linear-gradient(90deg, #B71C1C, #E53935, #FF5252, #E53935, #B71C1C);
+      background-size: 200% 100%;
+      animation: stripe-pulse 2s ease-in-out infinite;
+    }
+    .alert-card.tc-high::before {
+      background: linear-gradient(90deg, #E53935, #FF6B6B, #E53935);
+      background-size: 200% 100%;
+      animation: stripe-pulse 3s ease-in-out infinite;
+    }
+    .alert-card.tc-moderate::before {
+      background: linear-gradient(90deg, #FF6F00, #FFAB40, #FF6F00);
+    }
+    .alert-card.tc-low::before {
+      background: linear-gradient(90deg, #F9A825, #FFF176, #F9A825);
+    }
+    @keyframes stripe-pulse {
+      0%, 100% { background-position: 0% 50%; }
+      50%       { background-position: 100% 50%; }
+    }
 
-    .alert-card-top {
+    /* Card header row */
+    .alert-card-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 14px 10px;
+      padding: 13px 16px 0;
     }
-    .alert-card-threat { display: flex; align-items: center; gap: 7px; }
+    .alert-threat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px 4px 8px;
+      border-radius: 100px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
     .threat-dot {
-      width: 10px; height: 10px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       flex-shrink: 0;
-      box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+      animation: dotBlink 1.5s ease-in-out infinite;
     }
-    .threat-label {
-      font-family: 'Poppins', sans-serif;
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
+    @keyframes dotBlink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
     }
+    .tc-critical .alert-threat-pill { background: rgba(211,47,47,0.12); color: #B71C1C; }
+    .tc-critical .threat-dot { background: #D32F2F; }
+    .tc-high .alert-threat-pill { background: rgba(229,57,53,0.1); color: var(--red); }
+    .tc-high .threat-dot { background: var(--red); }
+    .tc-moderate .alert-threat-pill { background: rgba(255,111,0,0.1); color: var(--orange); }
+    .tc-moderate .threat-dot { background: var(--orange); animation: none; }
+    .tc-low .alert-threat-pill { background: rgba(249,168,37,0.12); color: #E65100; }
+    .tc-low .threat-dot { background: var(--yellow); animation: none; }
+
     .alert-card-meta {
       display: flex;
       align-items: center;
       gap: 10px;
       font-size: 12px;
       color: var(--text-3);
-      font-weight: 500;
+      font-weight: 600;
     }
-    .alert-card-sep {
+    .alert-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* Card body */
+    .alert-card-body {
+      padding: 10px 16px 12px;
+    }
+    .alert-divider {
       height: 1px;
       background: var(--border);
-      margin: 0 14px;
+      margin: 10px 0;
     }
-    .alert-card-body { padding: 10px 14px; }
-    .alert-card-location {
+    .alert-location-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .alert-pin-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .alert-location-text {
       font-family: 'Inter', sans-serif;
       font-size: 15px;
       font-weight: 700;
       color: var(--text);
-      margin-bottom: 4px;
+      line-height: 1.3;
     }
-    .alert-card-trigger {
+    .alert-trigger-text {
       font-size: 12px;
       color: var(--text-3);
+      margin-top: 4px;
+      padding-left: 24px;
     }
-    .ai-bar-wrap { margin: 12px 0 4px; }
+
+    /* AI Confidence bar */
+    .ai-bar-wrap { margin: 12px 0 2px; }
     .ai-bar-label {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       font-size: 11px;
       color: var(--text-3);
-      font-weight: 600;
-      margin-bottom: 6px;
+      font-weight: 700;
+      margin-bottom: 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ai-bar-pct {
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--red);
     }
     .ai-bar-track {
       height: 7px;
@@ -503,102 +861,424 @@
     .ai-bar-fill {
       height: 100%;
       border-radius: 100px;
-      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      background: linear-gradient(90deg, #E53935, #FF6B6B);
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
     }
+
+    /* Action buttons */
     .alert-card-actions {
       display: flex;
       gap: 10px;
-      padding: 10px 14px 16px;
+      padding: 0 16px 16px;
     }
-    .alert-card-actions .btn { flex: 1; }
+    .btn-accept {
+      flex: 1;
+      height: 52px;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #EF5350, #E53935 50%, #C62828);
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(229,57,53,0.5);
+      transition: transform 0.12s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-accept:active {
+      transform: scale(0.97);
+      box-shadow: 0 2px 10px rgba(229,57,53,0.4);
+    }
+    .btn-skip {
+      flex: 1;
+      height: 52px;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--text-2);
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.12s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-skip:active { background: #F5F5F5; transform: scale(0.97); }
 
-    /* ─── Active Alert View ──────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       BADGES / PILLS
+    ═══════════════════════════════════════════════════════ */
+    .badge {
+      display: inline-block;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+    .badge-green  { background: var(--green-light); color: var(--green); }
+    .badge-red    { background: var(--red-light);   color: var(--red-mid); }
+    .badge-orange { background: var(--orange-light); color: var(--orange); }
+    .badge-yellow { background: #FFFDE7;             color: #E65100; }
+    .badge-purple { background: var(--purple-light); color: var(--purple); }
+    .badge-pulse  { animation: badgePulse 1.6s ease-in-out infinite; }
+    @keyframes badgePulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.55; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       BOTTOM NAV
+    ═══════════════════════════════════════════════════════ */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 430px;
+      background: var(--dark-hdr);
+      border-top: 1px solid rgba(255,255,255,0.07);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 100;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    }
+    .nav-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.35);
+      cursor: pointer;
+      padding: 4px 20px;
+      border-radius: 12px;
+      border: none;
+      background: none;
+      transition: color 0.15s;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .nav-tab .nav-icon { font-size: 22px; }
+    .nav-tab.active { color: var(--red); }
+
+    /* ═══════════════════════════════════════════════════════
+       ▌ VIEW 4: ACTIVE ALERT
+    ═══════════════════════════════════════════════════════ */
+    #view-active { background: var(--bg); }
+
+    /* Alert header — red gradient with full info */
+    .alert-header {
+      background: linear-gradient(150deg, #7B1FA2 -10%, #C62828 30%, #E53935 65%, #D32F2F 100%);
+      color: #fff;
+      padding: 18px 18px 22px;
+      padding-top: max(18px, calc(env(safe-area-inset-top) + 12px));
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .alert-header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -40px;
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%);
+    }
+    .alert-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .alert-back-btn {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.15s;
+    }
+    .alert-back-btn:active { background: rgba(255,255,255,0.25); }
+    .en-route-badge {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 100px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      animation: badgePulse 1.4s ease-in-out infinite;
+    }
+    .alert-header-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      opacity: 0.75;
+      text-transform: uppercase;
+    }
+    .alert-header-id {
+      font-family: 'Poppins', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      margin-top: 4px;
+      letter-spacing: -0.5px;
+    }
+    .alert-header-sub { font-size: 13px; opacity: 0.85; margin-top: 3px; }
+
+    /* Distance row in alert header */
     .distance-row {
       display: flex;
       gap: 10px;
-      margin-bottom: 12px;
+      margin-top: 16px;
     }
     .distance-box {
       flex: 1;
-      background: rgba(255,255,255,0.15);
-      border-radius: 12px;
-      padding: 14px 12px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      padding: 14px 10px;
       text-align: center;
-      color: #fff;
     }
-    .distance-val  { font-family: 'Poppins', sans-serif; font-size: 24px; font-weight: 800; }
-    .distance-unit { font-size: 11px; opacity: 0.75; margin-top: 2px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .distance-val {
+      font-family: 'Poppins', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .distance-val.xl {
+      font-size: 40px;
+    }
+    .distance-unit {
+      font-size: 10px;
+      opacity: 0.65;
+      margin-top: 3px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
 
-    .location-card {
-      background: #fff;
-      border-radius: var(--radius);
+    /* Content cards */
+    .card {
+      background: var(--card);
+      border-radius: 18px;
       border: 1px solid var(--border);
-      padding: 16px;
-      margin-bottom: 12px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.06);
+    }
+    .card-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    /* Location card */
+    .location-card {
+      background: var(--card);
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.06);
       display: flex;
       align-items: flex-start;
-      gap: 12px;
+      gap: 14px;
     }
-    .location-pin { font-size: 28px; flex-shrink: 0; }
-    .location-area { font-size: 15px; font-weight: 600; color: var(--text); }
-    .location-coords { font-size: 12px; color: var(--text-3); margin-top: 3px; font-family: monospace; }
-
-    .status-buttons {
+    .location-pin-wrap {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--red-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .location-tag {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 5px;
+    }
+    .location-area {
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .location-coords {
+      font-size: 12px;
+      color: var(--text-3);
+      margin-top: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    .location-maps-row {
       display: flex;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-top: 12px;
     }
-    .status-btn {
+    .btn-maps {
       flex: 1;
-      padding: 11px 6px;
+      padding: 10px 12px;
       border-radius: 10px;
       border: 1.5px solid var(--border);
       background: #fff;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--text-2);
       cursor: pointer;
-      transition: all 0.15s;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .status-btn.active-status {
-      border-color: var(--red);
-      background: var(--red-light);
-      color: var(--red-dark);
-    }
-    .status-btn.resolved-status {
-      border-color: var(--green);
-      background: var(--green-light);
-      color: var(--green);
-    }
-    .status-btn:active { transform: scale(0.97); }
+    .btn-maps:hover { border-color: var(--red); color: var(--red); }
 
-    /* ─── Chat Section ───────────────────────────────────── */
-    .chat-messages {
-      max-height: 200px;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      background: #F5F5F5;
-      border-radius: 10px;
-      padding: 10px;
-      margin-bottom: 10px;
+    /* Navigate button — HERO CTA */
+    .btn-navigate {
+      width: 100%;
+      height: 64px;
+      border: none;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #E53935 0%, #B71C1C 100%);
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 32px rgba(229,57,53,0.45);
+      transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      text-decoration: none;
+      letter-spacing: 0.3px;
+    }
+    .btn-navigate:active {
+      transform: scale(0.97);
+      box-shadow: 0 4px 16px rgba(229,57,53,0.4);
+    }
+    .nav-arrow-icon {
+      font-size: 22px;
+      display: flex;
+    }
+
+    /* Status stepper */
+    .status-stepper {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 0;
+    }
+    .status-step {
+      flex: 1;
+      padding: 11px 8px;
+      border: 1.5px solid var(--border);
+      border-radius: 0;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-3);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      align-items: center;
+      gap: 3px;
+      line-height: 1.2;
     }
+    .status-step:first-child { border-radius: 12px 0 0 12px; }
+    .status-step:last-child  { border-radius: 0 12px 12px 0; }
+    .status-step + .status-step { border-left: none; }
+    .status-step-icon { font-size: 16px; }
+
+    /* States */
+    .status-step.active {
+      background: var(--red);
+      border-color: var(--red);
+      color: #fff;
+      box-shadow: 0 2px 12px rgba(229,57,53,0.35);
+      z-index: 1;
+    }
+    .status-step.done {
+      background: var(--green-light);
+      border-color: rgba(46,125,50,0.3);
+      color: var(--green);
+    }
+    .status-step.next {
+      background: #F5F5F5;
+      color: var(--text-3);
+    }
+    .status-step:active { transform: scale(0.97); }
+
+    /* ─── IDs for JS ─── */
+    #status-en-route {}
+    #status-arrived  {}
+    #status-resolved {}
+
+    /* Chat section */
+    .chat-messages {
+      max-height: 220px;
+      overflow-y: auto;
+      background: #F5F5F5;
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .chat-messages::-webkit-scrollbar { display: none; }
     .chat-msg {
       max-width: 80%;
-      padding: 8px 12px;
-      border-radius: 14px;
+      padding: 9px 13px;
+      border-radius: 16px;
       font-size: 13px;
-      line-height: 1.4;
+      line-height: 1.45;
       word-break: break-word;
     }
     .chat-msg.mine {
       align-self: flex-end;
-      background: var(--purple);
+      background: linear-gradient(135deg, #E53935, #C62828);
       color: #fff;
       border-bottom-right-radius: 4px;
+      box-shadow: 0 2px 8px rgba(229,57,53,0.3);
     }
     .chat-msg.theirs {
       align-self: flex-start;
@@ -606,36 +1286,40 @@
       color: var(--text);
       border: 1px solid var(--border);
       border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
     .chat-msg-meta {
       font-size: 10px;
-      opacity: 0.65;
-      margin-top: 3px;
+      opacity: 0.6;
+      margin-top: 4px;
+      font-weight: 500;
     }
+    .chat-msg.mine .chat-msg-meta { text-align: right; }
     .chat-empty {
       text-align: center;
       color: var(--text-3);
       font-size: 13px;
-      padding: 12px 0;
+      padding: 16px 0;
     }
     .quick-replies {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 10px;
+      gap: 7px;
+      margin-bottom: 12px;
     }
     .quick-reply-btn {
-      background: var(--purple-light);
-      color: var(--purple);
-      border: none;
+      background: rgba(229,57,53,0.08);
+      color: var(--red-mid);
+      border: 1.5px solid rgba(229,57,53,0.2);
       border-radius: 100px;
       font-size: 12px;
-      font-weight: 600;
-      padding: 6px 12px;
+      font-weight: 700;
+      padding: 7px 14px;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
     }
-    .quick-reply-btn:active { background: #E1BEE7; }
+    .quick-reply-btn:active { background: rgba(229,57,53,0.15); transform: scale(0.97); }
     .chat-input-row {
       display: flex;
       gap: 8px;
@@ -643,138 +1327,92 @@
     }
     .chat-input {
       flex: 1;
-      padding: 11px 14px;
+      padding: 12px 16px;
       border: 1.5px solid var(--border);
       border-radius: 100px;
       font-size: 14px;
-      font-family: inherit;
+      font-family: 'Inter', sans-serif;
       outline: none;
+      background: #F9F9F9;
+      color: var(--text);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .chat-input:focus {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(229,57,53,0.1);
       background: #fff;
     }
-    .chat-input:focus { border-color: var(--purple); }
     .chat-send-btn {
-      width: 42px; height: 42px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       border: none;
-      background: var(--purple);
+      background: linear-gradient(135deg, #E53935, #B71C1C);
       color: #fff;
       font-size: 18px;
       cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
+      box-shadow: 0 3px 10px rgba(229,57,53,0.35);
       transition: transform 0.12s;
     }
     .chat-send-btn:active { transform: scale(0.9); }
 
-    /* ─── Toast Notification ─────────────────────────────── */
-    #toast-container {
-      position: fixed;
-      top: max(20px, env(safe-area-inset-top));
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 99999;
-      width: calc(100% - 32px);
-      max-width: 360px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      pointer-events: none;
-    }
-    .toast {
-      background: #212121;
-      color: #fff;
-      padding: 14px 16px;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 500;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      animation: toastIn 0.3s ease;
-      pointer-events: auto;
-    }
-    .toast.toast-success { background: var(--green); }
-    .toast.toast-error   { background: var(--red-dark); }
-    .toast.toast-alert   { background: var(--red); }
-    @keyframes toastIn {
-      from { opacity: 0; transform: translateY(-12px) scale(0.95); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes toastOut {
-      to { opacity: 0; transform: translateY(-8px) scale(0.95); }
-    }
-
-    /* ─── Connection Status Dot ──────────────────────────── */
-    .conn-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #9E9E9E;
-      transition: background 0.3s;
-      flex-shrink: 0;
-    }
-    .conn-dot.connected    { background: #4CAF50; }
-    .conn-dot.disconnected { background: #E53935; }
-
-    /* ─── Profile Tab (inside feed) ──────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       PROFILE TAB
+    ═══════════════════════════════════════════════════════ */
     .profile-card {
-      background: linear-gradient(135deg, var(--red) 0%, var(--purple) 100%);
+      background: linear-gradient(135deg, var(--dark-hdr) 0%, #2d0a3e 100%);
       color: #fff;
-      border-radius: var(--radius);
-      padding: 24px;
+      border-radius: 20px;
+      padding: 28px 24px;
       text-align: center;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(229,57,53,0.2);
+      position: relative;
+      overflow: hidden;
+    }
+    .profile-card::before {
+      content: '';
+      position: absolute;
+      bottom: -60px;
+      right: -40px;
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle, rgba(123,31,162,0.3) 0%, transparent 65%);
     }
     .profile-avatar {
-      width: 80px; height: 80px;
+      width: 80px;
+      height: 80px;
       border-radius: 50%;
-      background: rgba(255,255,255,0.2);
-      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--red), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 36px;
       margin: 0 auto 14px;
-      border: 3px solid rgba(255,255,255,0.4);
+      border: 3px solid rgba(255,255,255,0.2);
+      box-shadow: 0 0 0 6px rgba(229,57,53,0.15);
+      position: relative;
+      z-index: 1;
     }
-    .profile-name  { font-size: 22px; font-weight: 700; }
-    .profile-phone { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+    .profile-name  { font-family: 'Poppins', sans-serif; font-size: 22px; font-weight: 700; }
+    .profile-phone { font-size: 13px; opacity: 0.65; margin-top: 4px; }
     .profile-stat-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
 
-    /* ─── Resolved Confirmation ──────────────────────────── */
-    .resolved-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.6);
-      z-index: 9000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .resolved-card {
-      background: #fff;
-      border-radius: 20px;
-      padding: 32px 24px;
-      text-align: center;
-      max-width: 320px;
-      width: 100%;
-      animation: popIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275);
-    }
-    @keyframes popIn {
-      from { transform: scale(0.8); opacity: 0; }
-      to   { transform: scale(1); opacity: 1; }
-    }
-    .resolved-icon  { font-size: 64px; margin-bottom: 12px; }
-    .resolved-title { font-size: 22px; font-weight: 700; color: var(--green); }
-    .resolved-sub   { font-size: 14px; color: var(--text-2); margin-top: 8px; }
-
-    /* ─── Map Tab Stub ───────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       MAP STUB
+    ═══════════════════════════════════════════════════════ */
     .map-stub {
       flex: 1;
-      background: #E8EAF6;
+      background: #EEF0F8;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -785,199 +1423,364 @@
       text-align: center;
       padding: 40px;
     }
-    .map-stub-icon { font-size: 72px; }
+    .map-stub-icon { font-size: 72px; opacity: 0.6; }
 
-    /* ─── Utilities ──────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════
+       RESOLVED OVERLAY
+    ═══════════════════════════════════════════════════════ */
+    .resolved-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 9000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(4px);
+    }
+    .resolved-card {
+      background: #fff;
+      border-radius: 24px;
+      padding: 36px 28px;
+      text-align: center;
+      max-width: 340px;
+      width: 100%;
+      animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.8) translateY(20px); opacity: 0; }
+      to   { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .resolved-icon  { font-size: 72px; margin-bottom: 16px; display: block; }
+    .resolved-title { font-family: 'Poppins', sans-serif; font-size: 24px; font-weight: 800; color: var(--green); }
+    .resolved-sub   { font-size: 14px; color: var(--text-2); margin-top: 10px; line-height: 1.5; }
+
+    /* ═══════════════════════════════════════════════════════
+       TOAST
+    ═══════════════════════════════════════════════════════ */
+    #toast-container {
+      position: fixed;
+      top: max(20px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 99999;
+      width: calc(100% - 32px);
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: #1A1A2E;
+      color: #fff;
+      padding: 14px 18px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: toastIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: auto;
+      border-left: 4px solid rgba(255,255,255,0.2);
+    }
+    .toast.toast-success { background: var(--green); border-left-color: rgba(255,255,255,0.4); }
+    .toast.toast-error   { background: var(--red-mid); border-left-color: rgba(255,255,255,0.4); }
+    .toast.toast-alert   {
+      background: var(--red);
+      border-left-color: rgba(255,255,255,0.4);
+      animation: toastIn 0.3s cubic-bezier(0.22, 1, 0.36, 1), toastShake 0.5s 0.3s ease;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(-16px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes toastShake {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-6px); }
+      40%       { transform: translateX(6px); }
+      60%       { transform: translateX(-4px); }
+      80%       { transform: translateX(4px); }
+    }
+    @keyframes toastOut {
+      to { opacity: 0; transform: translateY(-10px) scale(0.95); }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       CONNECTION DOT (legacy compat)
+    ═══════════════════════════════════════════════════════ */
+    .conn-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #9E9E9E;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+    .conn-dot.connected    { background: #4CAF50; }
+    .conn-dot.disconnected { background: #E53935; }
+
+    /* ═══════════════════════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════════════════════ */
     .hidden   { display: none !important; }
+    .mt-8     { margin-top: 8px; }
+    .mt-12    { margin-top: 12px; }
+    .mt-16    { margin-top: 16px; }
+    .fw-600   { font-weight: 600; }
+    .fw-700   { font-weight: 700; }
+    .fs-13    { font-size: 13px; }
+    .c-text2  { color: var(--text-2); }
+    .c-text3  { color: var(--text-3); }
+    .c-red    { color: var(--red); }
+    .w-full   { width: 100%; }
     .row      { display: flex; gap: 8px; }
     .text-center { text-align: center; }
-    .mt-8  { margin-top: 8px; }
-    .mt-12 { margin-top: 12px; }
-    .mt-16 { margin-top: 16px; }
-    .fw-600 { font-weight: 600; }
-    .fs-13  { font-size: 13px; }
-    .c-text2 { color: var(--text-2); }
-    .c-red   { color: var(--red); }
-    .w-full  { width: 100%; }
+    .divider  { height: 1px; background: var(--border); margin: 14px 0; }
+
+    /* Responder type in feed/profile - keep existing IDs working */
+    #vol-name, #vol-type { /* styled via parent elements */ }
+
+    /* active-alert-subtitle compat */
+    #active-alert-subtitle { font-size: 13px; opacity: 0.85; margin-top: 3px; }
   </style>
 </head>
 <body>
 
-<!-- ─── Loading Overlay ─────────────────────────────────── -->
+<!-- ─── Loading Overlay ───────────────────────────── -->
 <div id="loading-overlay">
-  <div class="loading-logo">🛡️</div>
-  <div class="loading-title">NaariRakshak</div>
-  <div class="loading-sub">Volunteer Portal</div>
-  <div class="spinner"></div>
+  <div class="lo-glow"></div>
+  <div class="lo-shield-wrap">
+    <span class="lo-shield">🛡️</span>
+  </div>
+  <div class="lo-title">NaariRakshak</div>
+  <div class="lo-sub">Volunteer Response</div>
+  <div class="lo-spinner-wrap">
+    <div class="spinner"></div>
+    <span class="lo-spinner-text">Connecting…</span>
+  </div>
 </div>
 
-<!-- ─── Toast Container ────────────────────────────────── -->
+<!-- ─── Toast Container ───────────────────────────── -->
 <div id="toast-container"></div>
 
-<!-- ─── Resolved Confirmation (hidden) ───────────────── -->
+<!-- ─── Resolved Confirmation ─────────────────────── -->
 <div id="resolved-overlay" class="resolved-overlay hidden">
   <div class="resolved-card">
-    <div class="resolved-icon">✅</div>
+    <span class="resolved-icon">✅</span>
     <div class="resolved-title">Alert Resolved!</div>
-    <div class="resolved-sub">Thank you for your service. You've helped keep someone safe today.</div>
-    <button class="btn btn-green btn-full mt-16" onclick="closeResolvedAndGoFeed()">Back to Feed</button>
+    <div class="resolved-sub">Outstanding work. You've helped keep someone safe today. The community thanks you.</div>
+    <button class="btn btn-green btn-full mt-16" onclick="closeResolvedAndGoFeed()" style="height:52px; border-radius:14px; font-family:'Poppins',sans-serif; font-weight:700; font-size:15px;">
+      ← Back to Feed
+    </button>
   </div>
 </div>
 
-<!-- ─── App Shell ──────────────────────────────────────── -->
+<!-- ─── App Shell ─────────────────────────────────── -->
 <div id="app">
 
-  <!-- ══════════════════════════════════════════════════════
+  <!-- ══════════════════════════════════════════════
        VIEW 1 — LOGIN
-  ═══════════════════════════════════════════════════════ -->
+  ══════════════════════════════════════════════ -->
   <div id="view-login" class="view active">
-    <div class="login-hero">
-      <div class="login-logo">🛡️</div>
-      <div class="login-app-name">NaariRakshak</div>
-      <div class="login-portal">Volunteer Portal</div>
-    </div>
+    <div class="login-bg"></div>
+    <div class="login-inner">
 
-    <div class="login-form-wrap">
-      <div class="login-form-title">Join the network</div>
+      <div class="login-logo-area">
+        <span class="login-shield">🛡️</span>
+        <div class="login-app-name">NaariRakshak</div>
+        <div class="login-tagline">Field Responder Portal</div>
+      </div>
 
-      <form id="login-form" autocomplete="on" novalidate>
-        <div class="form-group">
-          <label class="form-label" for="input-name">Full Name</label>
-          <input
-            id="input-name"
-            class="form-input"
-            type="text"
-            placeholder="e.g. Priya Sharma"
-            autocomplete="name"
-            required
+      <div class="login-card">
+        <div class="login-card-title">Volunteer Login</div>
+
+        <form id="login-form" autocomplete="on" novalidate>
+
+          <div class="form-group">
+            <label class="form-label" for="input-name">Full Name</label>
+            <input
+              id="input-name"
+              class="form-input"
+              type="text"
+              placeholder="e.g. Priya Sharma"
+              autocomplete="name"
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-phone">Phone Number</label>
+            <input
+              id="input-phone"
+              class="form-input"
+              type="tel"
+              placeholder="+91 98765 43210"
+              autocomplete="tel"
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Responder Type</label>
+            <div class="responder-seg">
+              <input class="seg-option" type="radio" name="responder-type" id="rt-police" value="police">
+              <label class="seg-label" for="rt-police">
+                <span class="seg-icon">🚔</span>
+                <span class="seg-text">Police</span>
+              </label>
+
+              <input class="seg-option" type="radio" name="responder-type" id="rt-volunteer" value="ngo_volunteer">
+              <label class="seg-label" for="rt-volunteer">
+                <span class="seg-icon">🤝</span>
+                <span class="seg-text">Volunteer</span>
+              </label>
+
+              <input class="seg-option" type="radio" name="responder-type" id="rt-medical" value="medical">
+              <label class="seg-label" for="rt-medical">
+                <span class="seg-icon">🏥</span>
+                <span class="seg-text">Medical</span>
+              </label>
+            </div>
+            <!-- Hidden select for JS compat -->
+            <select id="input-type" style="display:none;" required>
+              <option value="" disabled selected>Select your role</option>
+              <option value="police">Police Officer</option>
+              <option value="ngo_volunteer">NGO Volunteer</option>
+              <option value="medical">Medical Responder</option>
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            id="join-btn"
+            class="btn-login"
           >
-        </div>
+            <span>🛡️</span> Login &amp; Go Online
+          </button>
 
-        <div class="form-group">
-          <label class="form-label" for="input-phone">Phone Number</label>
-          <input
-            id="input-phone"
-            class="form-input"
-            type="tel"
-            placeholder="+91 9876543210"
-            autocomplete="tel"
-            required
-          >
-        </div>
+        </form>
 
-        <div class="form-group">
-          <label class="form-label" for="input-type">Volunteer Type</label>
-          <select id="input-type" class="form-select" required>
-            <option value="" disabled selected>Select your role</option>
-            <option value="police">🚔 Police Officer</option>
-            <option value="ngo_volunteer">🤝 NGO Volunteer</option>
-            <option value="medical">🏥 Medical Responder</option>
-          </select>
-        </div>
+        <p class="login-privacy">
+          <span>🔒 Your location is shared only during active alerts.</span>
+        </p>
+      </div>
 
-        <button
-          type="submit"
-          id="join-btn"
-          class="btn btn-red btn-full"
-          style="padding:16px; font-size:16px; margin-top:8px; border-radius:14px;"
-        >
-          Join Duty
-        </button>
-      </form>
-
-      <p class="fs-13 c-text2 text-center mt-12">
-        By joining you agree to respond to nearby emergencies.
-      </p>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════
+  <!-- ══════════════════════════════════════════════
        VIEW 2 — SHIFT CHECK-IN
-  ═══════════════════════════════════════════════════════ -->
+  ══════════════════════════════════════════════ -->
   <div id="view-shift" class="view">
-    <div class="top-bar">
-      <div>
-        <div class="top-bar-title">Ready to help?</div>
-        <div class="top-bar-subtitle">Confirm your shift below</div>
-      </div>
-      <div class="top-bar-right">
+
+    <div class="shift-topbar">
+      <div class="shift-topbar-brand">Naari<span>Rakshak</span></div>
+      <div style="display:flex; align-items:center; gap:8px;">
         <div id="conn-dot" class="conn-dot"></div>
+        <span style="font-size:12px; color:rgba(255,255,255,0.4); font-weight:600;">SYNC</span>
       </div>
     </div>
 
-    <div class="scroll-area" style="padding-bottom:24px;">
-      <div class="shift-hero">
-        <div class="shift-avatar">🛡️</div>
-        <div class="shift-name" id="shift-name">—</div>
-        <div class="shift-type" id="shift-type-label">—</div>
-        <div class="mt-8">
-          <span class="badge badge-purple" id="shift-badge">—</span>
-        </div>
+    <!-- Hero card -->
+    <div class="shift-hero-card">
+      <div class="shift-avatar">🛡️</div>
+      <div class="shift-name" id="shift-name">—</div>
+      <div class="shift-type-label" id="shift-type-label">—</div>
+      <div class="shift-badge-wrap">
+        <span class="badge badge-purple" id="shift-badge">—</span>
       </div>
+    </div>
 
-      <div class="stat-row" style="margin-bottom:16px;">
-        <div class="stat-card">
-          <div class="stat-num" id="stat-active-alerts">—</div>
-          <div class="stat-label">Active Alerts</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="stat-responders">—</div>
-          <div class="stat-label">On Duty Now</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="stat-resolved">—</div>
-          <div class="stat-label">Resolved Today</div>
-        </div>
+    <!-- Stats -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-num" id="stat-active-alerts">—</div>
+        <div class="stat-label">Active Alerts</div>
       </div>
-
-      <div class="card" style="background:#E8F5E9; border-color:#C8E6C9;">
-        <p class="fs-13 fw-600" style="color:var(--green); margin-bottom:4px;">📍 Location Access</p>
-        <p class="fs-13 c-text2" id="location-status-text">Requesting GPS…</p>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-responders">—</div>
+        <div class="stat-label">On Duty Now</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-resolved">—</div>
+        <div class="stat-label">Resolved Today</div>
+      </div>
+    </div>
 
-      <button
-        id="start-shift-btn"
-        class="btn btn-green btn-green-lg btn-full"
-        style="margin-top:4px;"
-      >
-        ▶ Start Shift
+    <!-- Location status -->
+    <div class="location-status-card">
+      <span class="loc-icon">📍</span>
+      <div>
+        <div class="loc-text">GPS Location</div>
+        <div style="font-size:12px; color:var(--green); opacity:0.75;" id="location-status-text">Requesting GPS…</div>
+      </div>
+    </div>
+
+    <!-- CTAs -->
+    <div class="shift-cta-wrap">
+      <button id="start-shift-btn" class="btn-start-shift">
+        <span>▶</span> Start Shift
       </button>
-
       <button
-        class="btn btn-ghost btn-full mt-8"
+        class="btn btn-ghost btn-full"
         onclick="logout()"
-        style="font-size:14px;"
+        style="height:48px; border-radius:14px;"
       >
         ← Change Account
       </button>
     </div>
+
   </div>
 
-  <!-- ══════════════════════════════════════════════════════
-       VIEW 3 — ALERT FEED  (main view)
-  ═══════════════════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════════════════
+       VIEW 3 — ALERT FEED
+  ══════════════════════════════════════════════ -->
   <div id="view-feed" class="view" style="background:var(--bg);">
-    <!-- Feed Header -->
-    <div class="feed-header">
-      <div>
-        <div class="feed-volunteer-name" id="feed-volunteer-name">Volunteer</div>
-        <div style="font-size:12px; color:var(--text-3); margin-top:1px;" id="feed-location-mini">Locating…</div>
+
+    <!-- Dark top bar -->
+    <div class="feed-topbar">
+      <div class="feed-brand">
+        <span class="feed-brand-shield">🛡️</span>
+        <span class="feed-brand-name">Naari<span>Rakshak</span></span>
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <span class="badge badge-green badge-pulse" id="duty-badge">ON DUTY</span>
-        <div id="conn-dot-feed" class="conn-dot"></div>
+      <div class="feed-status-row">
+        <div id="conn-dot-feed" class="online-dot"></div>
+        <span id="feed-online-label" class="online-label">Online</span>
       </div>
     </div>
 
-    <!-- Tab Content Areas -->
+    <!-- Volunteer status card -->
+    <div class="vol-status-card">
+      <div class="vol-info">
+        <div class="vol-avatar-sm">🛡️</div>
+        <div>
+          <div class="vol-name-text" id="feed-volunteer-name">Volunteer</div>
+          <div class="vol-type-text" id="feed-location-mini">Locating…</div>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div class="vol-available-pill">● Available</div>
+        <div class="vol-shift-time" id="feed-shift-time"></div>
+      </div>
+    </div>
+
+    <!-- Tab content areas -->
     <div id="tab-alerts" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
       <div class="scroll-area">
-        <div class="feed-section-title">Nearby Alerts</div>
+        <div class="feed-section-header">
+          <div class="feed-section-title">Nearby Alerts</div>
+          <div id="alert-count-badge" class="alert-count-badge hidden">0</div>
+        </div>
         <div id="alert-feed-list">
           <div class="empty-state">
-            <div class="empty-state-icon">📡</div>
-            <div class="empty-state-text">No active alerts nearby.</div>
-            <div class="empty-state-sub">Stay ready. You'll be notified instantly.</div>
+            <span class="empty-state-icon">📡</span>
+            <div class="empty-state-text">No active alerts in your area</div>
+            <div class="empty-state-sub">Stay alert, you're making a difference.<br>You'll be notified the moment help is needed.</div>
           </div>
         </div>
       </div>
@@ -986,14 +1789,14 @@
     <div id="tab-map" style="flex:1; display:none; flex-direction:column; overflow:hidden;">
       <div class="map-stub">
         <div class="map-stub-icon">🗺️</div>
-        <div class="fw-600" style="font-size:16px; color:var(--text);">Coverage Map</div>
-        <div>Accept an alert to open navigation to the victim's location.</div>
-        <div class="fs-13" id="map-coords-display" style="font-family:monospace; margin-top:6px; color:var(--text-3);">Waiting for GPS…</div>
+        <div class="fw-700" style="font-size:16px; color:var(--text);">Coverage Map</div>
+        <div style="max-width:240px;">Accept an alert to open navigation to the victim's location.</div>
+        <div class="fs-13 c-text3" id="map-coords-display" style="font-family:monospace; margin-top:6px;">Waiting for GPS…</div>
       </div>
     </div>
 
     <div id="tab-profile" style="flex:1; display:none; flex-direction:column; overflow:hidden;">
-      <div class="scroll-area" style="padding-bottom:80px;">
+      <div class="scroll-area" style="padding-bottom:90px;">
         <div class="profile-card">
           <div class="profile-avatar">🛡️</div>
           <div class="profile-name" id="profile-name">—</div>
@@ -1006,15 +1809,15 @@
             <div class="stat-label">Alerts Handled</div>
           </div>
           <div class="stat-card">
-            <div class="stat-num" style="color:var(--purple);" id="profile-stat-type">—</div>
+            <div class="stat-num" style="color:var(--purple); font-size:18px;" id="profile-stat-type">—</div>
             <div class="stat-label">Responder Type</div>
           </div>
         </div>
 
-        <button class="btn btn-ghost btn-full" style="margin-bottom:10px;" onclick="endShift()">
+        <button class="btn btn-ghost btn-full" style="margin-bottom:10px; height:50px; border-radius:14px;" onclick="endShift()">
           ⏹ End Shift
         </button>
-        <button class="btn btn-ghost btn-full" style="color:var(--red-dark);" onclick="logout()">
+        <button class="btn btn-ghost btn-full" style="color:var(--red-mid); height:50px; border-radius:14px;" onclick="logout()">
           Sign Out
         </button>
       </div>
@@ -1032,74 +1835,107 @@
         <span class="nav-icon">👤</span>Profile
       </button>
     </nav>
+
   </div>
 
-  <!-- ══════════════════════════════════════════════════════
+  <!-- ══════════════════════════════════════════════
        VIEW 4 — ACTIVE ALERT
-  ═══════════════════════════════════════════════════════ -->
+  ══════════════════════════════════════════════ -->
   <div id="view-active" class="view" style="background:var(--bg);">
-    <!-- Red header -->
+
+    <!-- Red gradient header -->
     <div class="alert-header">
+      <div class="alert-header-top">
+        <button class="alert-back-btn" onclick="abandonAlert()">
+          ← Back
+        </button>
+        <div class="en-route-badge">🚗 EN ROUTE</div>
+      </div>
+
       <div class="alert-header-label">Active Response</div>
       <div class="alert-header-id" id="active-alert-title">Alert #——</div>
-      <div class="alert-header-sub" id="active-alert-subtitle">En route to victim location</div>
+      <div id="active-alert-subtitle">En route to victim location</div>
 
-      <div class="distance-row" style="margin-top:14px;">
-        <div class="distance-box">
-          <div class="distance-val" id="active-distance">—</div>
-          <div class="distance-unit">km away</div>
+      <div class="distance-row">
+        <div class="distance-box" style="flex:2;">
+          <div class="distance-val xl" id="active-distance">—</div>
+          <div class="distance-unit">km remaining</div>
         </div>
         <div class="distance-box">
           <div class="distance-val" id="active-eta">—</div>
           <div class="distance-unit">min ETA</div>
         </div>
         <div class="distance-box">
-          <div class="distance-val" id="active-threat-badge" style="font-size:13px; font-weight:700;">—</div>
-          <div class="distance-unit">threat level</div>
+          <div class="distance-val" id="active-threat-badge" style="font-size:13px; font-weight:700; text-transform:uppercase;">—</div>
+          <div class="distance-unit">threat</div>
         </div>
       </div>
     </div>
 
     <div class="scroll-area">
-      <!-- Location Card -->
+
+      <!-- Location card -->
       <div class="location-card">
-        <div class="location-pin">📍</div>
-        <div>
-          <div style="font-size:11px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Victim Location</div>
+        <div class="location-pin-wrap">📍</div>
+        <div style="flex:1;">
+          <div class="location-tag">Victim Location</div>
           <div class="location-area" id="active-location-area">—</div>
           <div class="location-coords" id="active-location-coords">—</div>
+          <div class="location-maps-row">
+            <a
+              id="navigate-btn"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-maps"
+            >
+              🗺️ Google Maps
+            </a>
+            <a
+              id="navigate-btn-ola"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-maps"
+            >
+              🚗 OLA Maps
+            </a>
+          </div>
         </div>
       </div>
 
-      <!-- Navigate Button -->
+      <!-- NAVIGATE NOW — Hero CTA -->
       <a
-        id="navigate-btn"
+        id="nav-btn"
         href="#"
         target="_blank"
         rel="noopener noreferrer"
-        class="btn btn-purple btn-full"
-        style="font-size:16px; padding:18px; border-radius:14px; margin-bottom:12px; text-decoration:none;"
+        class="btn-navigate"
       >
-        🗺️ Navigate Now
+        <span class="nav-arrow-icon">🗺️</span>
+        NAVIGATE NOW
       </a>
 
-      <!-- Status Buttons -->
+      <!-- Status stepper -->
       <div class="card">
-        <div class="card-title">Update Status</div>
-        <div class="status-buttons">
-          <button class="status-btn active-status" id="status-en-route" onclick="setVolunteerStatus('en_route')">
-            🚗 En Route
+        <div class="card-title">Response Status</div>
+        <div class="status-stepper">
+          <button class="status-step active" id="status-en-route" onclick="setVolunteerStatus('en_route')">
+            <span class="status-step-icon">🚗</span>
+            En Route
           </button>
-          <button class="status-btn" id="status-arrived" onclick="setVolunteerStatus('arrived')">
-            ✅ Arrived
+          <button class="status-step next" id="status-arrived" onclick="setVolunteerStatus('arrived')">
+            <span class="status-step-icon">✅</span>
+            Arrived
           </button>
-          <button class="status-btn" id="status-resolved" onclick="confirmResolve()">
-            🎉 Resolved
+          <button class="status-step next" id="status-resolved" onclick="confirmResolve()">
+            <span class="status-step-icon">🎉</span>
+            Resolved
           </button>
         </div>
       </div>
 
-      <!-- Chat Card -->
+      <!-- Chat card -->
       <div class="card">
         <div class="card-title">Chat with Victim</div>
 
@@ -1126,21 +1962,22 @@
         </div>
       </div>
 
-      <!-- Back / Abandon -->
+      <!-- Abandon -->
       <button
         class="btn btn-ghost btn-full"
-        style="margin-top:4px; color:#B71C1C;"
+        style="margin-top:4px; color:#B71C1C; height:50px; border-radius:14px; font-weight:700;"
         onclick="abandonAlert()"
       >
         ← Abandon (go back to feed)
       </button>
+
     </div>
   </div>
 
 </div><!-- /#app -->
 
 
-<!-- ─── Socket.IO ──────────────────────────────────────── -->
+<!-- ─── Socket.IO ──────────────────────────────────── -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"
         crossorigin="anonymous"
         onerror="loadSocketIOFallback()"></script>
@@ -1155,6 +1992,7 @@ function loadSocketIOFallback() {
 <script>
 /* ════════════════════════════════════════════════════════════
    NAARIRAKSHAK VOLUNTEER PWA — Core JavaScript
+   (All logic preserved from original, UI enhancements only)
 ════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -1179,6 +2017,25 @@ let activeAlertData = null;       // currently accepted alert object
 let currentStatus   = 'en_route'; // tracking volunteer status on active alert
 let beepCtx         = null;       // AudioContext for alert beep
 let currentTab      = 'alerts';
+let shiftStartTime  = null;
+
+// ─── Sync segmented control to hidden select ──────────────
+document.querySelectorAll('.seg-option').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.getElementById('input-type').value = radio.value;
+  });
+});
+
+// ─── Shift time display ───────────────────────────────────
+function updateShiftTime() {
+  if (!shiftStartTime) return;
+  const el = document.getElementById('feed-shift-time');
+  if (!el) return;
+  const diff = Math.floor((Date.now() - shiftStartTime) / 1000);
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  el.textContent = `${h}h ${m}m on duty`;
+}
 
 // ─── Helpers: Time ────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -1208,7 +2065,6 @@ function haversine(lat1, lon1, lat2, lon2) {
 }
 
 function etaMinutes(distKm) {
-  // Assume 30 km/h average urban speed
   return Math.round((distKm / 30) * 60);
 }
 
@@ -1277,12 +2133,23 @@ function showView(id) {
 
 // ─── Connection Dot Sync ──────────────────────────────────
 function setConnDot(connected) {
+  // Legacy conn-dot elements
   ['conn-dot', 'conn-dot-feed'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.toggle('connected',    connected);
     el.classList.toggle('disconnected', !connected);
   });
+  // New feed online dot
+  const dot   = document.querySelector('#view-feed .online-dot');
+  const label = document.getElementById('feed-online-label');
+  if (dot) {
+    dot.classList.toggle('offline', !connected);
+  }
+  if (label) {
+    label.textContent = connected ? 'Online' : 'Offline';
+    label.classList.toggle('offline', !connected);
+  }
 }
 
 /* ════════════════════════════════════════════════════════
@@ -1338,6 +2205,8 @@ function connectSocket() {
     if (volunteer.responder_id) {
       socket.emit('user_register', { user_id: volunteer.responder_id });
     }
+    // Hide loading overlay on first connect
+    document.getElementById('loading-overlay').classList.add('hidden');
   });
 
   socket.on('disconnect', () => setConnDot(false));
@@ -1358,7 +2227,6 @@ function connectSocket() {
       delete alertsMap[data.alert_id];
       renderFeed();
     }
-    // If we're on this alert, go back
     if (activeAlertData && activeAlertData.alert_id === data.alert_id) {
       toast('This alert was cancelled.', 'error', '❌');
       exitActiveAlert();
@@ -1380,7 +2248,6 @@ function connectSocket() {
         renderFeed();
       }
       if (activeAlertData && activeAlertData.alert_id === data.alert_id) {
-        // Someone else resolved it
         if (data.status === 'resolved') {
           showResolved();
         } else {
@@ -1389,6 +2256,11 @@ function connectSocket() {
         }
       }
     }
+  });
+
+  // ── Responder Location Update ─────────────────────────
+  socket.on('responder_location_update', data => {
+    // location update from other responders — handled if needed
   });
 }
 
@@ -1402,13 +2274,13 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const type  = document.getElementById('input-type').value;
 
   if (!name || !phone || !type) {
-    toast('Please fill all fields.', 'error', '⚠️');
+    toast('Please fill all fields and select your role.', 'error', '⚠️');
     return;
   }
 
   const btn = document.getElementById('join-btn');
   btn.disabled = true;
-  btn.textContent = 'Joining…';
+  btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;"></div> Joining…';
 
   try {
     const res  = await fetch('/api/responders/register', {
@@ -1426,9 +2298,7 @@ document.getElementById('login-form').addEventListener('submit', async e => {
       volunteer.phone        = phone;
       volunteer.type         = type;
 
-      // Persist
       localStorage.setItem('nr_volunteer', JSON.stringify(volunteer));
-
       showShiftView();
     } else {
       toast(data.error || 'Registration failed.', 'error', '❌');
@@ -1437,12 +2307,11 @@ document.getElementById('login-form').addEventListener('submit', async e => {
     toast('Connection error. Is the server running?', 'error', '📡');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Join Duty';
+    btn.innerHTML = '<span>🛡️</span> Login &amp; Go Online';
   }
 });
 
 function showShiftView() {
-  // Populate shift info
   document.getElementById('shift-name').textContent        = volunteer.name;
   document.getElementById('shift-type-label').textContent  = typeLabel(volunteer.type);
   document.getElementById('shift-badge').textContent       = typeLabel(volunteer.type);
@@ -1466,9 +2335,8 @@ async function loadStats() {
   } catch(e) { /* non-critical */ }
 }
 
-/* ─── Start Shift ─────────────────────────────────────── */
+/* ─── Start Shift ─────────────────────────────────── */
 document.getElementById('start-shift-btn').addEventListener('click', () => {
-  // Emit availability
   if (socket && socket.connected) {
     socket.emit('volunteer_status_update', {
       responder_id: volunteer.responder_id,
@@ -1476,15 +2344,17 @@ document.getElementById('start-shift-btn').addEventListener('click', () => {
       alert_id:     null
     });
   }
+  shiftStartTime = Date.now();
+  setInterval(updateShiftTime, 60000);
   showFeedView();
 });
 
 function showFeedView() {
-  // Populate feed header
   document.getElementById('feed-volunteer-name').textContent = volunteer.name;
   document.getElementById('profile-name').textContent        = volunteer.name;
   document.getElementById('profile-phone').textContent       = volunteer.phone;
   document.getElementById('profile-stat-type').textContent   = typeLabel(volunteer.type).split(' ')[0];
+  updateShiftTime();
 
   showView('view-feed');
   switchTab('alerts');
@@ -1515,18 +2385,24 @@ function sortedAlerts() {
 
 function renderFeed() {
   const list    = document.getElementById('alert-feed-list');
-  const alerts  = sortedAlerts();
+  const alerts  = window.sortedAlerts ? window.sortedAlerts() : sortedAlerts();
+  const badge   = document.getElementById('alert-count-badge');
 
   if (alerts.length === 0) {
+    if (badge) badge.classList.add('hidden');
     list.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">📡</div>
-        <div class="empty-state-text">No active alerts nearby.</div>
-        <div class="empty-state-sub">Stay ready. You'll be notified instantly.</div>
+        <span class="empty-state-icon">📡</span>
+        <div class="empty-state-text">No active alerts in your area</div>
+        <div class="empty-state-sub">Stay alert, you're making a difference.<br>You'll be notified the moment help is needed.</div>
       </div>`;
     return;
   }
 
+  if (badge) {
+    badge.classList.remove('hidden');
+    badge.textContent = alerts.length;
+  }
   list.innerHTML = alerts.map(a => alertCardHTML(a)).join('');
 }
 
@@ -1539,57 +2415,60 @@ function alertCardHTML(a) {
   const conf     = Math.round((a.ai_confidence || 0) * 100);
   const location = (a.user && a.user.name)
     ? `Alert from ${escHtml(a.user.name)}`
-    : (a.latitude ? `${a.latitude.toFixed(4)}, ${a.longitude.toFixed(4)}` : 'Location unknown');
+    : (a.latitude ? `${a.latitude.toFixed(4)}° N, ${a.longitude.toFixed(4)}° E` : 'Location unknown');
   const trigger  = escHtml(a.trigger_method || 'SOS trigger');
-
-  // Build confidence bar (10 blocks)
-  const filled  = Math.round(conf / 10);
-  const barHtml = '█'.repeat(filled) + '░'.repeat(10 - filled);
 
   return `
     <div class="alert-card tc-${lvl}" id="acard-${escHtml(a.alert_id)}">
-      <div class="alert-card-top">
-        <div class="alert-card-threat">
-          <div class="threat-dot" style="background:${tc.dot};"></div>
-          <span class="threat-label" style="color:${tc.dot};">${lvl.toUpperCase()}</span>
+
+      <div class="alert-card-header">
+        <div class="alert-threat-pill">
+          <div class="threat-dot"></div>
+          ${lvl.toUpperCase()}
         </div>
         <div class="alert-card-meta">
-          <span>📍 ${distStr}</span>
-          <span>🕐 ${ago}</span>
+          <div class="alert-meta-item">📍 ${distStr}</div>
+          <div class="alert-meta-item">🕐 ${ago}</div>
         </div>
       </div>
-      <div class="alert-card-sep"></div>
+
       <div class="alert-card-body">
-        <div class="alert-card-location">${location}</div>
-        <div class="alert-card-trigger">${trigger.replace('_',' ')}</div>
+        <div class="alert-divider"></div>
+        <div class="alert-location-row">
+          <span class="alert-pin-icon">📍</span>
+          <div>
+            <div class="alert-location-text">${location}</div>
+            <div class="alert-trigger-text">${trigger.replace(/_/g,' ')}</div>
+          </div>
+        </div>
         <div class="ai-bar-wrap">
           <div class="ai-bar-label">
-            <span>AI Confidence</span>
-            <span>${conf}%</span>
+            <span>AI Risk Score</span>
+            <span class="ai-bar-pct">${conf}%</span>
           </div>
           <div class="ai-bar-track">
             <div class="ai-bar-fill" style="width:${conf}%; background:${barColor(conf)};"></div>
           </div>
         </div>
       </div>
+
       <div class="alert-card-actions">
         <button
-          class="btn btn-red"
+          class="btn-accept"
           onclick="acceptAlert('${escHtml(a.alert_id)}')"
-        >ACCEPT</button>
+        >✓ ACCEPT</button>
         <button
-          class="btn btn-ghost"
+          class="btn-skip"
           onclick="skipAlert('${escHtml(a.alert_id)}')"
-        >SKIP</button>
+        >→ SKIP</button>
       </div>
+
     </div>`;
 }
 
 function skipAlert(alertId) {
   const card = document.getElementById('acard-' + alertId);
   if (card) card.classList.add('skipped');
-  // Don't remove from map — just hide so re-render won't show it
-  // Mark as skipped in local map
   if (alertsMap[alertId]) alertsMap[alertId]._skipped = true;
   renderFeed();
 }
@@ -1598,7 +2477,6 @@ async function acceptAlert(alertId) {
   const alertData = alertsMap[alertId];
   if (!alertData) return;
 
-  // Emit accept
   if (socket && socket.connected) {
     socket.emit('volunteer_accept_alert', {
       alert_id:       alertId,
@@ -1608,16 +2486,12 @@ async function acceptAlert(alertId) {
     });
   }
 
-  // Set active alert state
   activeAlertData = alertData;
   volunteer.activeAlertId  = alertId;
   volunteer.handledCount++;
   document.getElementById('profile-stat-handled').textContent = volunteer.handledCount;
 
-  // Load chat history
   loadChatHistory(alertId);
-
-  // Show active view
   showActiveAlert(alertData);
 }
 
@@ -1626,8 +2500,8 @@ async function acceptAlert(alertId) {
 ════════════════════════════════════════════════════════ */
 function showActiveAlert(a) {
   const shortId = a.alert_id.substring(0, 8).toUpperCase();
-  document.getElementById('active-alert-title').textContent    = `Alert #${shortId} — EN ROUTE`;
-  document.getElementById('active-alert-subtitle').textContent = `Responding to ${(a.trigger_method||'SOS').replace('_',' ')}`;
+  document.getElementById('active-alert-title').textContent    = `🚨 Alert #${shortId}`;
+  document.getElementById('active-alert-subtitle').textContent = `Responding to ${(a.trigger_method||'SOS').replace(/_/g,' ')}`;
 
   const lvl  = (a.threat_level || 'moderate').toUpperCase();
   document.getElementById('active-threat-badge').textContent   = lvl;
@@ -1640,18 +2514,20 @@ function showActiveAlert(a) {
   document.getElementById('active-location-coords').textContent =
     a.latitude ? `${a.latitude.toFixed(6)}, ${a.longitude.toFixed(6)}` : '';
 
-  // Navigate link
+  // Navigate links
   if (a.latitude && a.longitude) {
-    document.getElementById('navigate-btn').href =
-      `https://maps.google.com/?daddr=${a.latitude},${a.longitude}`;
+    const googleUrl = `https://maps.google.com/?daddr=${a.latitude},${a.longitude}`;
+    const olaUrl    = `https://olamaps.io/directions?destination=${a.latitude},${a.longitude}`;
+    document.getElementById('navigate-btn').href     = googleUrl;
+    document.getElementById('nav-btn').href          = googleUrl;
+    document.getElementById('navigate-btn-ola').href = olaUrl;
   } else {
-    document.getElementById('navigate-btn').removeAttribute('href');
+    ['navigate-btn','nav-btn','navigate-btn-ola'].forEach(id => {
+      document.getElementById(id).removeAttribute('href');
+    });
   }
 
-  // Distances
   updateActiveDistances();
-
-  // Reset status buttons
   resetStatusButtons('en_route');
   currentStatus = 'en_route';
 
@@ -1684,10 +2560,19 @@ function resetStatusButtons(active) {
     arrived:  document.getElementById('status-arrived'),
     resolved: document.getElementById('status-resolved')
   };
+  const order = ['en_route', 'arrived', 'resolved'];
+  const activeIdx = order.indexOf(active);
+
   Object.entries(btns).forEach(([k, el]) => {
-    el.classList.remove('active-status', 'resolved-status');
-    if (k === active) {
-      el.classList.add(active === 'resolved' ? 'resolved-status' : 'active-status');
+    if (!el) return;
+    el.classList.remove('active', 'done', 'next');
+    const idx = order.indexOf(k);
+    if (idx < activeIdx) {
+      el.classList.add('done');
+    } else if (idx === activeIdx) {
+      el.classList.add('active');
+    } else {
+      el.classList.add('next');
     }
   });
 }
@@ -1695,7 +2580,6 @@ function resetStatusButtons(active) {
 function confirmResolve() {
   if (!confirm('Mark this alert as RESOLVED?\n\nOnly confirm if the victim is safe.')) return;
   setVolunteerStatus('resolved');
-  // Remove from local map
   if (activeAlertData) delete alertsMap[activeAlertData.alert_id];
   showResolved();
 }
@@ -1718,7 +2602,6 @@ function exitActiveAlert() {
 
 function abandonAlert() {
   if (!confirm('Go back to feed? You will be marked as available again.')) return;
-  // Re-emit available
   if (socket && socket.connected) {
     socket.emit('volunteer_status_update', {
       alert_id:     activeAlertData ? activeAlertData.alert_id : null,
@@ -1826,6 +2709,7 @@ function endShift() {
       alert_id:     null
     });
   }
+  shiftStartTime = null;
   toast('Shift ended. Stay safe!', 'success', '👋');
   setTimeout(() => showView('view-shift'), 1000);
 }
@@ -1837,6 +2721,7 @@ function logout() {
   volunteer = { id: null, responder_id: null, name: '', phone: '', type: '', activeAlertId: null, handledCount: 0 };
   alertsMap = {};
   activeAlertData = null;
+  shiftStartTime  = null;
   showView('view-login');
 }
 
@@ -1844,10 +2729,10 @@ function logout() {
    INIT — Restore Session
 ════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', () => {
-  // Hide loading overlay
+  // Loading overlay: hide after 700ms OR on socket connect (whichever first)
   setTimeout(() => {
     document.getElementById('loading-overlay').classList.add('hidden');
-  }, 700);
+  }, 1400);
 
   // Try restore saved session
   const saved = localStorage.getItem('nr_volunteer');
@@ -1868,9 +2753,8 @@ window.addEventListener('DOMContentLoaded', () => {
   showView('view-login');
 });
 
-/* ─── Filter already-skipped alerts on re-render ────── */
+/* ─── Override sortedAlerts to filter skipped ─────── */
 const _origSorted = sortedAlerts;
-// Override to exclude _skipped entries
 window.sortedAlerts = function() {
   return Object.values(alertsMap)
     .filter(a => !a._skipped)
@@ -1880,24 +2764,29 @@ window.sortedAlerts = function() {
       return da - db;
     });
 };
-// Patch renderFeed to call window.sortedAlerts
-const _origRenderFeed = renderFeed;
+
+/* ─── Override renderFeed to use patched sortedAlerts ─ */
 window.renderFeed = function() {
-  const list    = document.getElementById('alert-feed-list');
-  const alerts  = window.sortedAlerts();
+  const list   = document.getElementById('alert-feed-list');
+  const alerts = window.sortedAlerts();
+  const badge  = document.getElementById('alert-count-badge');
+
   if (alerts.length === 0) {
+    if (badge) badge.classList.add('hidden');
     list.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">📡</div>
-        <div class="empty-state-text">No active alerts nearby.</div>
-        <div class="empty-state-sub">Stay ready. You'll be notified instantly.</div>
+        <span class="empty-state-icon">📡</span>
+        <div class="empty-state-text">No active alerts in your area</div>
+        <div class="empty-state-sub">Stay alert, you're making a difference.<br>You'll be notified the moment help is needed.</div>
       </div>`;
     return;
   }
+  if (badge) {
+    badge.classList.remove('hidden');
+    badge.textContent = alerts.length;
+  }
   list.innerHTML = alerts.map(a => alertCardHTML(a)).join('');
 };
-// Use patched versions
-// (socket listeners and other callers already call the global renderFeed)
 
 </script>
 </body>
