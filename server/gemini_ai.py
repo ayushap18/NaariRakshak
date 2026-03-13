@@ -26,19 +26,27 @@ def _get_client():
     return _client
 
 def _generate(prompt: str) -> str:
-    """Call Gemini and return text response. Returns None on failure."""
+    """Call Gemini and return text response. Returns None on failure. Tries multiple models."""
     client = _get_client()
     if client is None:
         return None
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt
-        )
-        return response.text.strip() if response.text else None
-    except Exception as e:
-        print(f"[GeminiAI] API call failed: {e}")
-        return None
+    models_to_try = ['gemini-2.0-flash', 'gemini-2.0-flash-lite']
+    for model in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt
+            )
+            return response.text.strip() if response.text else None
+        except Exception as e:
+            err_str = str(e)
+            if 'RESOURCE_EXHAUSTED' in err_str or '429' in err_str:
+                print(f"[GeminiAI] Quota exhausted for {model}, trying next...")
+                continue
+            print(f"[GeminiAI] API call failed ({model}): {e}")
+            return None
+    print("[GeminiAI] All models quota exhausted — falling back to rule-based")
+    return None
 
 
 # ---------------------------------------------------------------------------
