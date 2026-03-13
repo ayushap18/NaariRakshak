@@ -35,7 +35,7 @@ _model_fail_time = 0
 _MODEL_RETRY_COOLDOWN = 30  # seconds before retrying after failure
 
 MODEL_ID = "jaranohaal/vit-base-violence-detection"
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.85
 FRAME_SAMPLE_INTERVAL = 15  # analyse every Nth frame
 
 
@@ -167,11 +167,8 @@ def analyse_frame(image_bytes: bytes) -> dict:
             label = _model.config.id2label[idx]
             scores[label] = round(prob.item(), 4)
 
-        # Find violence-related label
-        violence_score = 0.0
-        for label, score in scores.items():
-            if 'violence' in label.lower() or 'violent' in label.lower():
-                violence_score = max(violence_score, score)
+        # Get the violence class score (exact match, not substring)
+        violence_score = scores.get('violence', 0.0)
 
         is_violent = violence_score >= CONFIDENCE_THRESHOLD
         predicted_idx = logits.argmax(-1).item()

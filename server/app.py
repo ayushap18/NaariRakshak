@@ -876,7 +876,7 @@ def cctv_frame():
     result = cctv_analyse_frame(image_bytes)
 
     # If violence detected, auto-create alert and notify dashboard
-    if result.get('violence') and result.get('confidence', 0) >= 0.75:
+    if result.get('violence') and result.get('confidence', 0) >= 0.85:
         socketio.emit('cctv_violence_detected', {
             'confidence': result['confidence'],
             'label': result['label'],
