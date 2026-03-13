@@ -1,0 +1,1775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NaariRakshak — Command Center</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- External CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    /* ─────────────────────────────────────────
+       RESET & BASE
+    ───────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0A0A1A;
+      --sidebar:   #0F0F2A;
+      --card:      #12122A;
+      --border:    #1E1E3A;
+      --accent:    #E53935;
+      --accent2:   #7B1FA2;
+      --success:   #2E7D32;
+      --warning:   #FF6F00;
+      --info:      #1565C0;
+      --text:      #FFFFFF;
+      --muted:     #8888AA;
+      --font-head: 'Poppins', -apple-system, system-ui, sans-serif;
+      --font:      'Inter', -apple-system, system-ui, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* Subtle scanline texture for ops dashboard feel */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255,255,255,0.012) 2px,
+        rgba(255,255,255,0.012) 4px
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─────────────────────────────────────────
+       LAYOUT
+    ───────────────────────────────────────── */
+    #app {
+      display: grid;
+      grid-template-rows: 52px 1fr;
+      grid-template-columns: 280px 1fr 300px;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Header spans all 3 columns */
+    #header {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      background: var(--sidebar);
+      border-bottom: 1px solid var(--accent);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      z-index: 100;
+      position: relative;
+    }
+
+    #left-sidebar  { grid-column: 1; grid-row: 2; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    #map-area      { grid-column: 2; grid-row: 2; position: relative; overflow: hidden; }
+    #right-sidebar { grid-column: 3; grid-row: 2; background: var(--sidebar); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ─────────────────────────────────────────
+       HEADER
+    ───────────────────────────────────────── */
+    #header {
+      background: linear-gradient(90deg, #0D0D24 0%, #0F0F2A 60%, #12122E 100%);
+      border-bottom: 1px solid transparent;
+      box-shadow: 0 1px 0 rgba(229,57,53,0.5), 0 2px 16px rgba(229,57,53,0.1);
+    }
+
+    #header-title {
+      font-family: var(--font-head);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #header-title::before {
+      content: '🛡️';
+      font-size: 18px;
+    }
+
+    #header-stats {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .stat-pill {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: default;
+      backdrop-filter: blur(4px);
+      transition: all 0.3s;
+    }
+
+    .stat-pill.danger  { border-color: rgba(229,57,53,0.6); color: #FF6B6B; background: rgba(229,57,53,0.1); }
+    .stat-pill.ok      { border-color: rgba(46,125,50,0.6); color: #81C784; background: rgba(46,125,50,0.08); }
+    .stat-pill.neutral { border-color: var(--border); color: var(--muted); }
+
+    #header-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .hdr-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .hdr-btn:hover { background: rgba(255,255,255,0.14); }
+    .hdr-btn.active { border-color: var(--accent); color: #FF6B6B; }
+
+    #conn-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+    #conn-dot.connected { background: #4CAF50; box-shadow: 0 0 6px #4CAF50; }
+
+    /* ─────────────────────────────────────────
+       SIDEBAR SHARED
+    ───────────────────────────────────────── */
+    .sidebar-header {
+      padding: 14px 14px 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-title {
+      font-family: var(--font-head);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+    .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ─────────────────────────────────────────
+       FILTER TABS
+    ───────────────────────────────────────── */
+    .filter-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 10px 14px 6px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .filter-tab {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 14px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-tab:hover, .filter-tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* ─────────────────────────────────────────
+       ALERT CARDS
+    ───────────────────────────────────────── */
+    .alert-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 13px 10px;
+      margin-bottom: 9px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .alert-card:hover { border-color: rgba(229,57,53,0.5); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .alert-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 4px 20px rgba(229,57,53,0.15); }
+
+    .alert-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 4px;
+      border-radius: 4px 0 0 4px;
+    }
+    .alert-card.level-critical::before { background: linear-gradient(180deg, #FF1744, #D32F2F); }
+    .alert-card.level-high::before     { background: linear-gradient(180deg, #FF5252, var(--accent)); }
+    .alert-card.level-moderate::before { background: linear-gradient(180deg, #FFAB40, var(--warning)); }
+    .alert-card.level-low::before      { background: linear-gradient(180deg, #FFF176, #FDD835); }
+
+    /* Glow effect on critical cards */
+    .alert-card.level-critical {
+      box-shadow: inset 0 0 30px rgba(211,47,47,0.07);
+    }
+
+    .alert-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 4px;
+    }
+
+    .alert-level-badge {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+    .badge-critical { background: rgba(211,47,47,0.25); color: #EF9A9A; border: 1px solid #D32F2F; animation: pulse-badge 1.8s infinite; }
+    .badge-high     { background: rgba(229,57,53,0.2);  color: #EF9A9A; border: 1px solid var(--accent); }
+    .badge-moderate { background: rgba(255,111,0,0.2);  color: #FFCC80; border: 1px solid var(--warning); }
+    .badge-low      { background: rgba(253,216,53,0.15); color: #FFF176; border: 1px solid #F9A825; }
+
+    @keyframes pulse-badge {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.55; }
+    }
+
+    .alert-id-time {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .alert-location {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 3px 0;
+    }
+
+    .alert-trigger {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .ai-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .ai-label { font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+    .ai-bar-track {
+      flex: 1;
+      height: 5px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .ai-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .ai-pct { font-size: 10px; font-weight: 700; white-space: nowrap; }
+
+    .alert-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      letter-spacing: 0.3px;
+    }
+    .btn:hover  { opacity: 0.85; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-dispatch { background: var(--accent);  color: #fff; }
+    .btn-ack      { background: #1565C0;        color: #fff; }
+    .btn-chat     { background: var(--accent2); color: #fff; }
+    .btn-resolve  { background: var(--success); color: #fff; }
+    .btn-cancel   { background: #333355;        color: var(--muted); }
+
+    /* ─────────────────────────────────────────
+       MAP AREA
+    ───────────────────────────────────────── */
+    #map { width: 100%; height: 100%; }
+
+    /* Map overlay controls */
+    #map-layer-controls {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .layer-btn {
+      background: rgba(12,12,30,0.94);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.15s;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .layer-btn.on  { border-color: rgba(229,57,53,0.6); color: #FF6B6B; background: rgba(229,57,53,0.12); }
+    .layer-btn:hover { background: rgba(229,57,53,0.15); color: #FF6B6B; }
+
+    /* AI Insight banner */
+    #ai-banner {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      z-index: 500;
+      background: linear-gradient(90deg, rgba(10,10,26,0.96) 0%, rgba(18,10,30,0.96) 50%, rgba(10,10,26,0.96) 100%);
+      border-top: 1px solid rgba(123,31,162,0.4);
+      padding: 9px 16px;
+      font-size: 12px;
+      font-family: var(--font);
+      color: var(--muted);
+      backdrop-filter: blur(10px);
+      transition: opacity 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #ai-banner::before {
+      content: '🤖';
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    #ai-banner span { color: #CE93D8; font-weight: 600; }
+
+    /* ─────────────────────────────────────────
+       RESPONDERS PANEL (right sidebar)
+    ───────────────────────────────────────── */
+    .resp-tabs {
+      display: flex;
+      gap: 0;
+      padding: 10px 14px 0;
+      flex-shrink: 0;
+    }
+
+    .resp-tab {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .resp-tab:first-child { border-radius: 6px 0 0 6px; }
+    .resp-tab:last-child  { border-radius: 0 6px 6px 0; }
+    .resp-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .responder-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 11px;
+      margin-bottom: 7px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .resp-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .resp-dot.available { background: #4CAF50; box-shadow: 0 0 5px #4CAF50; }
+    .resp-dot.busy      { background: #FFC107; }
+    .resp-dot.offline   { background: #555577; }
+
+    .resp-info { flex: 1; min-width: 0; }
+    .resp-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .resp-meta { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+    .resp-dispatch-btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      border-radius: 5px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .resp-dispatch-btn:disabled { background: #333355; color: #555577; cursor: not-allowed; }
+    .resp-dispatch-btn:not(:disabled):hover { opacity: 0.8; }
+
+    /* Stats section */
+    #stats-section {
+      border-top: 1px solid var(--border);
+      padding: 12px 14px;
+      flex-shrink: 0;
+    }
+
+    .stats-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .stat-block {
+      background: linear-gradient(135deg, var(--card) 0%, rgba(30,30,58,0.5) 100%);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      transition: border-color 0.2s;
+    }
+    .stat-block:hover { border-color: rgba(255,255,255,0.2); }
+
+    .stat-block-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-block-value { font-family: var(--font-head); font-size: 20px; font-weight: 700; color: var(--text); }
+    .stat-block-value.danger { color: #EF9A9A; }
+    .stat-block-value.ok    { color: #81C784; }
+
+    /* ─────────────────────────────────────────
+       CHAT PANEL (slide-in overlay)
+    ───────────────────────────────────────── */
+    #chat-panel {
+      position: fixed;
+      top: 52px; right: 0; bottom: 0;
+      width: 320px;
+      background: var(--sidebar);
+      border-left: 1px solid var(--border);
+      z-index: 900;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+      box-shadow: -6px 0 24px rgba(0,0,0,0.5);
+    }
+    #chat-panel.open { transform: translateX(0); }
+
+    #chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #chat-title { font-size: 13px; font-weight: 700; }
+
+    #chat-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+    #chat-close:hover { color: var(--text); }
+
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #chat-messages::-webkit-scrollbar { width: 4px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .chat-msg {
+      max-width: 80%;
+      padding: 7px 11px;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .chat-msg.operator {
+      align-self: flex-end;
+      background: rgba(229,57,53,0.22);
+      border: 1px solid rgba(229,57,53,0.4);
+      color: var(--text);
+    }
+
+    .chat-msg.user {
+      align-self: flex-start;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .chat-msg-meta {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    #chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #chat-input {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-family: var(--font);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #chat-input:focus { border-color: var(--accent2); }
+
+    #chat-send {
+      background: var(--accent2);
+      border: none;
+      color: #fff;
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #chat-send:hover { opacity: 0.85; }
+
+    /* ─────────────────────────────────────────
+       DISPATCH MODAL
+    ───────────────────────────────────────── */
+    #modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.72);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #modal-overlay.open { display: flex; }
+
+    #modal-dispatch {
+      background: var(--sidebar);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      width: 360px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    }
+
+    #modal-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .modal-responder-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .modal-responder-option:hover { border-color: var(--accent); }
+    .modal-responder-option input[type="radio"] { accent-color: var(--accent); }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn-modal-confirm { background: var(--accent);  color: #fff; flex: 1; padding: 8px; font-size: 13px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; }
+    .btn-modal-cancel  { background: #1E1E3A; color: var(--muted); flex: 0 0 90px; padding: 8px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+    .btn-modal-confirm:hover { opacity: 0.85; }
+    .btn-modal-cancel:hover  { color: var(--text); }
+
+    /* ─────────────────────────────────────────
+       EMPTY STATE
+    ───────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 30px 20px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .empty-state .empty-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
+
+    /* ─────────────────────────────────────────
+       LEAFLET CUSTOM MARKER
+    ───────────────────────────────────────── */
+    .alert-marker-pulse {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: #E53935;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 0 rgba(229,57,53,0.6);
+      animation: map-pulse 1.6s infinite;
+    }
+
+    @keyframes map-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(229,57,53,0.6); }
+      70%  { box-shadow: 0 0 0 12px rgba(229,57,53,0); }
+      100% { box-shadow: 0 0 0 0 rgba(229,57,53,0); }
+    }
+
+    .responder-marker-police  { background: #1565C0; }
+    .responder-marker-medical { background: #E65100; }
+    .responder-marker-volunteer { background: #2E7D32; }
+
+    .responder-dot-marker {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+
+    /* Leaflet popup */
+    .leaflet-popup-content-wrapper {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: 12px;
+    }
+    .leaflet-popup-tip { background: var(--card); }
+    .leaflet-popup-close-button { color: var(--muted) !important; }
+
+    .popup-row { margin: 2px 0; }
+    .popup-row b { color: #CE93D8; }
+    .popup-row.alert-id-row { font-size: 13px; font-weight: 700; color: #FF6B6B; margin-bottom: 6px; }
+
+    /* ─────────────────────────────────────────
+       TOAST NOTIFICATION
+    ───────────────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      top: 60px; right: 12px;
+      z-index: 1100;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 7px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      max-width: 260px;
+      animation: toast-in 0.25s ease;
+      pointer-events: all;
+    }
+
+    .toast.success { border-left-color: #4CAF50; }
+    .toast.warning { border-left-color: var(--warning); }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(30px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ─────────────────────────────────────────
+       SCROLLBAR global
+    ───────────────────────────────────────── */
+    * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  </style>
+</head>
+
+<body>
+<div id="app">
+
+  <!-- ═══════════════════════════════════════
+       HEADER
+  ═══════════════════════════════════════ -->
+  <header id="header">
+    <div id="header-title">NaariRakshak Command Center</div>
+
+    <div id="header-stats">
+      <div class="stat-pill danger">🔴 <span id="h-active">0</span> Active</div>
+      <div class="stat-pill ok">👮 <span id="h-responders">0/0</span> Responders</div>
+      <div class="stat-pill neutral">⏱️ Avg: <span id="h-avg">--</span></div>
+    </div>
+
+    <div id="header-controls">
+      <div id="conn-dot" title="Connection status"></div>
+      <button class="hdr-btn active" id="btn-sound" onclick="toggleSound()">🔊 Sound ON</button>
+      <button class="hdr-btn" onclick="resetDemo()">↺ Reset Demo</button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════
+       LEFT SIDEBAR — ALERTS
+  ═══════════════════════════════════════ -->
+  <aside id="left-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">
+        🚨 LIVE ALERTS
+        <span class="badge" id="alert-badge">0</span>
+      </div>
+    </div>
+
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all">All</button>
+      <button class="filter-tab" data-filter="critical">Critical</button>
+      <button class="filter-tab" data-filter="high">High</button>
+      <button class="filter-tab" data-filter="active">Active</button>
+      <button class="filter-tab" data-filter="resolved">Resolved</button>
+    </div>
+
+    <div class="sidebar-scroll" id="alerts-list">
+      <div class="empty-state">
+        <div class="empty-icon">📡</div>
+        <div>Loading alerts…</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════
+       MAP CENTER
+  ═══════════════════════════════════════ -->
+  <main id="map-area">
+    <div id="map"></div>
+
+    <div id="map-layer-controls">
+      <button class="layer-btn on"  id="lyr-alerts"    onclick="toggleLayer('alerts')">🚨 Alerts</button>
+      <button class="layer-btn on"  id="lyr-responders" onclick="toggleLayer('responders')">👤 Responders</button>
+      <button class="layer-btn on"  id="lyr-danger"    onclick="toggleLayer('danger')">🔥 Danger Zones</button>
+      <button class="layer-btn"     id="lyr-heatmap"   onclick="toggleLayer('heatmap')">🌡️ Heatmap</button>
+    </div>
+
+    <div id="ai-banner">
+      <span id="ai-insight-text">AI: Analysing current threat landscape…</span>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════
+       RIGHT SIDEBAR — RESPONDERS
+  ═══════════════════════════════════════ -->
+  <aside id="right-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">👮 RESPONDERS</div>
+    </div>
+
+    <div class="resp-tabs">
+      <button class="resp-tab active" data-rtab="official" onclick="switchRespTab(this)">Police/Medical</button>
+      <button class="resp-tab" data-rtab="volunteer" onclick="switchRespTab(this)">Volunteers</button>
+    </div>
+
+    <div class="sidebar-scroll" id="responders-list">
+      <div class="empty-state">
+        <div class="empty-icon">⏳</div>
+        <div>Loading responders…</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div id="stats-section">
+      <div class="stats-title">STATS</div>
+      <div class="stats-grid">
+        <div class="stat-block">
+          <div class="stat-block-label">Active Alerts</div>
+          <div class="stat-block-value danger" id="stat-active">0</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-block-label">Avg Response</div>
+          <div class="stat-block-value" id="stat-avg">--</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-block-label">Today Total</div>
+          <div class="stat-block-value" id="stat-today">0</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-block-label">Danger Zones</div>
+          <div class="stat-block-value ok" id="stat-zones">0</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</div><!-- /#app -->
+
+
+<!-- ═══════════════════════════════════════
+     CHAT SLIDE-IN PANEL
+═══════════════════════════════════════ -->
+<div id="chat-panel">
+  <div id="chat-header">
+    <span id="chat-title">💬 Chat</span>
+    <button id="chat-close" onclick="closeChatPanel()">×</button>
+  </div>
+  <div id="chat-messages"></div>
+  <div id="chat-input-row">
+    <input id="chat-input" type="text" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendChatMessage()" />
+    <button id="chat-send" onclick="sendChatMessage()">Send</button>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     DISPATCH MODAL
+═══════════════════════════════════════ -->
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div id="modal-dispatch">
+    <div id="modal-title">Dispatch Responder</div>
+    <div id="modal-responder-list"></div>
+    <div class="modal-actions">
+      <button class="btn-modal-confirm" onclick="confirmDispatch()">✓ Confirm Dispatch</button>
+      <button class="btn-modal-cancel"  onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     TOAST CONTAINER
+═══════════════════════════════════════ -->
+<div id="toast-container"></div>
+
+
+<!-- ═══════════════════════════════════════
+     SCRIPTS
+═══════════════════════════════════════ -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+<script>
+/* ─────────────────────────────────────────────────
+   STATE
+───────────────────────────────────────────────── */
+const alerts     = {};   // alert_id → alertObj
+const responders = {};   // responder_id → responderObj
+
+let map, heatLayer;
+const alertMarkers     = {};   // alert_id → L.Marker
+const responderMarkers = {};   // responder_id → L.Marker
+const dangerCircles    = [];   // L.Circle[]
+
+const layerState = { alerts: true, responders: true, danger: true, heatmap: false };
+let soundEnabled  = true;
+let activeFilter  = 'all';
+let activeRespTab = 'official';
+
+// Chat state
+let chatAlertId = null;
+
+// Modal state
+let dispatchTargetAlertId = null;
+
+/* ─────────────────────────────────────────────────
+   SOCKET.IO
+───────────────────────────────────────────────── */
+const socket = io();
+
+socket.on('connect', () => {
+  document.getElementById('conn-dot').className = 'connected';
+  loadAlerts();
+  loadResponders();
+  loadDangerZones();
+  loadStats();
+});
+
+socket.on('disconnect', () => {
+  document.getElementById('conn-dot').className = '';
+});
+
+socket.on('alert_triggered', data => {
+  alerts[data.alert_id] = data;
+  renderAlerts();
+  addOrUpdateAlertMarker(data);
+  updateHeaderStats();
+  if (data.threat_level === 'critical' || data.threat_level === 'high') {
+    if (soundEnabled) playAlertSound();
+    showToast(`🚨 New ${data.threat_level.toUpperCase()} alert — ${getLocationLabel(data)}`, 'danger');
+    flashTitle('🚨 NEW ALERT!');
+  }
+  updateAIBanner();
+});
+
+socket.on('alert_cancelled', data => {
+  if (alerts[data.alert_id]) {
+    alerts[data.alert_id].status = 'cancelled';
+    renderAlerts();
+    removeAlertMarker(data.alert_id);
+    updateHeaderStats();
+  }
+});
+
+socket.on('alert_status_changed', data => {
+  if (alerts[data.alert_id]) {
+    alerts[data.alert_id].status = data.status;
+    if (data.responder) {
+      const r = data.responder;
+      responders[r.responder_id] = r;
+    }
+    renderAlerts();
+    renderResponders();
+    updateHeaderStats();
+  }
+});
+
+socket.on('responder_dispatched', data => {
+  if (data.responder) {
+    responders[data.responder.responder_id] = data.responder;
+    renderResponders();
+    updateHeaderStats();
+  }
+});
+
+socket.on('location_updated', data => {
+  if (alerts[data.alert_id]) {
+    alerts[data.alert_id].latitude  = data.latitude;
+    alerts[data.alert_id].longitude = data.longitude;
+    addOrUpdateAlertMarker(alerts[data.alert_id]);
+  }
+});
+
+socket.on('new_chat_message', msg => {
+  if (chatAlertId && msg.alert_id === chatAlertId) {
+    appendChatMessage(msg);
+  }
+});
+
+socket.on('danger_zone_added', zone => {
+  addDangerZone(zone);
+});
+
+socket.on('demo_reset', () => {
+  setTimeout(() => location.reload(), 800);
+});
+
+/* ─────────────────────────────────────────────────
+   MAP INIT
+───────────────────────────────────────────────── */
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([28.6139, 77.2090], 12);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://carto.com/">CartoDB</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+}
+
+/* ─────────────────────────────────────────────────
+   MARKERS — ALERTS
+───────────────────────────────────────────────── */
+function makeAlertIcon(threatLevel) {
+  const colors = {
+    critical: '#D32F2F',
+    high:     '#E53935',
+    moderate: '#FF6F00',
+    low:      '#FDD835'
+  };
+  const c = colors[threatLevel] || '#E53935';
+  const anim = (threatLevel === 'critical') ? 'animation:map-pulse 1.6s infinite;' : '';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);${anim}"></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9]
+  });
+}
+
+function addOrUpdateAlertMarker(alert) {
+  if (!map || !alert.latitude || !alert.longitude) return;
+  if (!layerState.alerts) return;
+
+  if (alertMarkers[alert.alert_id]) {
+    alertMarkers[alert.alert_id].setLatLng([alert.latitude, alert.longitude]);
+    alertMarkers[alert.alert_id].setIcon(makeAlertIcon(alert.threat_level));
+  } else {
+    const marker = L.marker([alert.latitude, alert.longitude], {
+      icon: makeAlertIcon(alert.threat_level)
+    }).addTo(map);
+    marker.bindPopup(buildAlertPopup(alert));
+    alertMarkers[alert.alert_id] = marker;
+  }
+  alertMarkers[alert.alert_id].setPopupContent(buildAlertPopup(alert));
+}
+
+function buildAlertPopup(alert) {
+  const shortId = (alert.alert_id || '').substring(0, 8);
+  const pct = alert.ai_risk_score ? Math.round(alert.ai_risk_score * 100) : (alert.ai_confidence ? Math.round(alert.ai_confidence * 100) : null);
+  return `
+    <div style="min-width:180px;font-family:-apple-system,system-ui,sans-serif;">
+      <div class="popup-row alert-id-row">Alert #${shortId}</div>
+      <div class="popup-row"><b>Status:</b> ${(alert.status||'').toUpperCase()}</div>
+      <div class="popup-row"><b>Threat:</b> ${(alert.threat_level||'').toUpperCase()}</div>
+      <div class="popup-row"><b>Trigger:</b> ${alert.trigger_method || 'N/A'}</div>
+      <div class="popup-row"><b>Time:</b> ${formatTimeAgo(alert.triggered_at)}</div>
+      ${pct !== null ? `<div class="popup-row"><b>AI Risk:</b> ${pct}%</div>` : ''}
+      ${alert.user && alert.user.name ? `<div class="popup-row"><b>User:</b> ${alert.user.name}</div>` : ''}
+    </div>
+  `;
+}
+
+function removeAlertMarker(alertId) {
+  if (alertMarkers[alertId] && map) {
+    map.removeLayer(alertMarkers[alertId]);
+    delete alertMarkers[alertId];
+  }
+}
+
+/* ─────────────────────────────────────────────────
+   MARKERS — RESPONDERS
+───────────────────────────────────────────────── */
+function makeResponderIcon(type) {
+  const colors = {
+    police:    '#1565C0',
+    medical:   '#E65100',
+    volunteer: '#2E7D32'
+  };
+  const c = colors[type] || '#555';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${c};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+}
+
+function refreshResponderMarkers() {
+  if (!map) return;
+  Object.values(responderMarkers).forEach(m => map.removeLayer(m));
+  Object.keys(responderMarkers).forEach(k => delete responderMarkers[k]);
+
+  if (!layerState.responders) return;
+
+  Object.values(responders).forEach(r => {
+    if (!r.latitude || !r.longitude) return;
+    const m = L.marker([r.latitude, r.longitude], { icon: makeResponderIcon(r.type) }).addTo(map);
+    m.bindPopup(`
+      <div style="font-family:-apple-system,system-ui,sans-serif;font-size:12px;min-width:140px;">
+        <div style="font-weight:700;color:#CE93D8;margin-bottom:4px;">${r.name}</div>
+        <div><b>Type:</b> ${(r.type||'').toUpperCase()}</div>
+        <div><b>Status:</b> ${r.is_available ? 'Available' : 'Busy'}</div>
+        ${r.rating ? `<div><b>Rating:</b> ${r.rating} ⭐</div>` : ''}
+      </div>
+    `);
+    responderMarkers[r.responder_id] = m;
+  });
+}
+
+/* ─────────────────────────────────────────────────
+   DANGER ZONES
+───────────────────────────────────────────────── */
+function addDangerZone(zone) {
+  if (!map || !zone.latitude || !zone.longitude) return;
+  const circle = L.circle([zone.latitude, zone.longitude], {
+    radius: zone.radius_meters || 150,
+    color: '#FF6F00',
+    fillColor: '#FF6F00',
+    fillOpacity: 0.15,
+    weight: 1.5
+  }).addTo(map);
+  circle.bindPopup(`
+    <div style="font-family:-apple-system,system-ui,sans-serif;font-size:12px;">
+      <div style="font-weight:700;color:#FFCC80;margin-bottom:4px;">⚠️ Danger Zone</div>
+      <div><b>Category:</b> ${zone.category || 'N/A'}</div>
+      ${zone.description ? `<div><b>Note:</b> ${zone.description}</div>` : ''}
+      <div><b>Reports:</b> ${zone.report_count || 1}</div>
+    </div>
+  `);
+  dangerCircles.push(circle);
+
+  if (!layerState.danger) circle.remove();
+}
+
+/* ─────────────────────────────────────────────────
+   LAYER TOGGLES
+───────────────────────────────────────────────── */
+function toggleLayer(layerName) {
+  layerState[layerName] = !layerState[layerName];
+  const btn = document.getElementById('lyr-' + layerName);
+  if (layerState[layerName]) btn.classList.add('on');
+  else btn.classList.remove('on');
+
+  if (layerName === 'alerts') {
+    Object.values(alertMarkers).forEach(m => layerState.alerts ? map.addLayer(m) : map.removeLayer(m));
+  }
+  if (layerName === 'responders') {
+    refreshResponderMarkers();
+  }
+  if (layerName === 'danger') {
+    dangerCircles.forEach(c => layerState.danger ? map.addLayer(c) : map.removeLayer(c));
+  }
+  if (layerName === 'heatmap') {
+    if (layerState.heatmap && heatLayer) map.addLayer(heatLayer);
+    else if (!layerState.heatmap && heatLayer) map.removeLayer(heatLayer);
+  }
+}
+
+/* ─────────────────────────────────────────────────
+   API LOADERS
+───────────────────────────────────────────────── */
+async function loadAlerts() {
+  try {
+    const r = await fetch('/api/alerts?status=active&limit=50');
+    const d = await r.json();
+    // Also load triggered, acknowledged, dispatched
+    const r2 = await fetch('/api/alerts?limit=50');
+    const d2 = await r2.json();
+
+    (d2.alerts || []).forEach(a => { alerts[a.alert_id] = a; });
+    (d.alerts  || []).forEach(a => { alerts[a.alert_id] = a; });
+
+    renderAlerts();
+    updateHeaderStats();
+
+    // Add markers for active alerts
+    Object.values(alerts).forEach(a => {
+      if (['triggered','acknowledged','dispatched'].includes(a.status)) {
+        addOrUpdateAlertMarker(a);
+      }
+    });
+
+    updateAIBanner();
+  } catch(e) { console.error('loadAlerts', e); }
+}
+
+async function loadResponders() {
+  try {
+    const r = await fetch('/api/responders');
+    const d = await r.json();
+    (d.responders || []).forEach(resp => { responders[resp.responder_id] = resp; });
+    renderResponders();
+    refreshResponderMarkers();
+    updateHeaderStats();
+  } catch(e) { console.error('loadResponders', e); }
+}
+
+async function loadDangerZones() {
+  try {
+    const r = await fetch('/api/danger-zones');
+    const d = await r.json();
+    const heatPoints = [];
+
+    (d.zones || []).forEach(z => {
+      addDangerZone(z);
+      if (z.latitude && z.longitude) {
+        heatPoints.push([z.latitude, z.longitude, Math.min(1, (z.report_count || 1) / 5)]);
+      }
+    });
+
+    document.getElementById('stat-zones').textContent = (d.zones || []).length;
+
+    // Build heatmap layer
+    if (typeof L.heatLayer === 'function' && heatPoints.length) {
+      heatLayer = L.heatLayer(heatPoints, { radius: 35, blur: 20, maxZoom: 16 });
+      if (layerState.heatmap) heatLayer.addTo(map);
+    }
+  } catch(e) { console.error('loadDangerZones', e); }
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    document.getElementById('stat-active').textContent = d.active_alerts || 0;
+    document.getElementById('stat-today').textContent  = d.total_alerts  || 0;
+
+    const totalResp = d.total_responders || 0;
+    const availResp = d.available_responders || 0;
+    document.getElementById('h-responders').textContent = `${availResp}/${totalResp}`;
+
+    if (d.avg_response_seconds) {
+      const fmt = formatSeconds(d.avg_response_seconds);
+      document.getElementById('stat-avg').textContent = fmt;
+      document.getElementById('h-avg').textContent    = fmt;
+    }
+  } catch(e) { console.error('loadStats', e); }
+}
+
+/* ─────────────────────────────────────────────────
+   RENDER — ALERTS
+───────────────────────────────────────────────── */
+function renderAlerts() {
+  const list = document.getElementById('alerts-list');
+  let items = Object.values(alerts);
+
+  // Filter
+  if (activeFilter === 'critical') {
+    items = items.filter(a => a.threat_level === 'critical');
+  } else if (activeFilter === 'high') {
+    items = items.filter(a => a.threat_level === 'high');
+  } else if (activeFilter === 'active') {
+    items = items.filter(a => ['triggered','acknowledged','dispatched'].includes(a.status));
+  } else if (activeFilter === 'resolved') {
+    items = items.filter(a => ['resolved','cancelled'].includes(a.status));
+  }
+
+  // Sort: active first, then by time descending
+  items.sort((a, b) => {
+    const aActive = ['triggered','acknowledged','dispatched'].includes(a.status) ? 0 : 1;
+    const bActive = ['triggered','acknowledged','dispatched'].includes(b.status) ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    return new Date(b.triggered_at) - new Date(a.triggered_at);
+  });
+
+  // Badge count
+  const activeCount = Object.values(alerts).filter(a => ['triggered','acknowledged','dispatched'].includes(a.status)).length;
+  document.getElementById('alert-badge').textContent = activeCount;
+  document.getElementById('h-active').textContent    = activeCount;
+  document.getElementById('stat-active').textContent = activeCount;
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div>No alerts match this filter</div></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(a => buildAlertCard(a)).join('');
+}
+
+function buildAlertCard(a) {
+  const shortId  = (a.alert_id || '').substring(0, 8);
+  const level    = (a.threat_level || 'low').toLowerCase();
+  const status   = (a.status || '').toLowerCase();
+  const isActive = ['triggered','acknowledged','dispatched'].includes(status);
+  const pct      = a.ai_risk_score ? Math.round(a.ai_risk_score * 100)
+                 : a.ai_confidence ? Math.round(a.ai_confidence * 100)
+                 : null;
+
+  const barColor = pct >= 80 ? '#D32F2F' : pct >= 55 ? '#E53935' : pct >= 35 ? '#FF6F00' : '#FDD835';
+  const location = getLocationLabel(a);
+  const timeAgo  = formatTimeAgo(a.triggered_at);
+
+  let actionBtns = '';
+  if (status === 'triggered') {
+    actionBtns = `
+      <button class="btn btn-dispatch" onclick="event.stopPropagation();openDispatchModal('${a.alert_id}')">Dispatch</button>
+      <button class="btn btn-ack"      onclick="event.stopPropagation();acknowledgeAlert('${a.alert_id}')">Acknowledge</button>
+    `;
+  } else if (status === 'acknowledged') {
+    actionBtns = `
+      <button class="btn btn-dispatch" onclick="event.stopPropagation();openDispatchModal('${a.alert_id}')">Dispatch</button>
+    `;
+  } else if (status === 'dispatched') {
+    actionBtns = `
+      <button class="btn btn-resolve" onclick="event.stopPropagation();resolveAlert('${a.alert_id}')">Resolve</button>
+    `;
+  }
+
+  actionBtns += `<button class="btn btn-chat" onclick="event.stopPropagation();openChatPanel('${a.alert_id}')">💬 Chat</button>`;
+
+  return `
+    <div class="alert-card level-${level}" id="card-${a.alert_id}" onclick="focusAlert('${a.alert_id}')">
+      <div class="alert-card-top">
+        <span class="alert-level-badge badge-${level}">${level === 'critical' ? '🔴' : level === 'high' ? '🟠' : '🟡'} ${level.toUpperCase()}</span>
+        <span class="alert-id-time">#${shortId} · ${timeAgo}</span>
+      </div>
+      <div class="alert-location">${location}</div>
+      <div class="alert-trigger">Trigger: ${a.trigger_method || 'N/A'}${a.user && a.user.name ? ' · ' + a.user.name : ''}</div>
+      ${pct !== null ? `
+        <div class="ai-bar-row">
+          <span class="ai-label">AI</span>
+          <div class="ai-bar-track"><div class="ai-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+          <span class="ai-pct" style="color:${barColor}">${pct}%</span>
+        </div>
+      ` : ''}
+      <div class="alert-actions">${actionBtns}</div>
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────────
+   RENDER — RESPONDERS
+───────────────────────────────────────────────── */
+function renderResponders() {
+  const list = document.getElementById('responders-list');
+  let items = Object.values(responders);
+
+  if (activeRespTab === 'official') {
+    items = items.filter(r => r.type === 'police' || r.type === 'medical');
+  } else {
+    items = items.filter(r => r.type === 'volunteer');
+  }
+
+  // Sort: available first
+  items.sort((a, b) => (b.is_available ? 1 : 0) - (a.is_available ? 1 : 0));
+
+  const availCount = Object.values(responders).filter(r => r.is_available).length;
+  const totalCount = Object.values(responders).length;
+  document.getElementById('h-responders').textContent = `${availCount}/${totalCount}`;
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">👤</div><div>No responders in this category</div></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(r => buildResponderItem(r)).join('');
+}
+
+function buildResponderItem(r) {
+  const dotClass = r.is_available ? 'available' : (r.current_alert_id ? 'busy' : 'offline');
+  const typeLabel = r.type === 'police' ? 'Police' : r.type === 'medical' ? 'Medical' : 'NGO Volunteer';
+  const distLabel = r.distance_km ? `${r.distance_km.toFixed(1)} km away` : '';
+  return `
+    <div class="responder-item">
+      <div class="resp-dot ${dotClass}"></div>
+      <div class="resp-info">
+        <div class="resp-name">${r.name}</div>
+        <div class="resp-meta">${typeLabel}${distLabel ? ' · ' + distLabel : ''}</div>
+      </div>
+      <button class="resp-dispatch-btn" ${!r.is_available ? 'disabled' : ''}
+        onclick="quickDispatch('${r.responder_id}')">
+        ${r.is_available ? 'Dispatch' : 'Busy'}
+      </button>
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────────
+   HEADER STATS
+───────────────────────────────────────────────── */
+function updateHeaderStats() {
+  const activeCount = Object.values(alerts).filter(a => ['triggered','acknowledged','dispatched'].includes(a.status)).length;
+  document.getElementById('h-active').textContent = activeCount;
+  document.getElementById('stat-active').textContent = activeCount;
+
+  const availCount = Object.values(responders).filter(r => r.is_available).length;
+  const totalCount = Object.values(responders).length;
+  document.getElementById('h-responders').textContent = `${availCount}/${totalCount}`;
+}
+
+/* ─────────────────────────────────────────────────
+   FILTER TABS
+───────────────────────────────────────────────── */
+document.querySelectorAll('.filter-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    renderAlerts();
+  });
+});
+
+/* ─────────────────────────────────────────────────
+   RESPONDER TABS
+───────────────────────────────────────────────── */
+function switchRespTab(btn) {
+  document.querySelectorAll('.resp-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeRespTab = btn.dataset.rtab;
+  renderResponders();
+}
+
+/* ─────────────────────────────────────────────────
+   ALERT ACTIONS
+───────────────────────────────────────────────── */
+function acknowledgeAlert(alertId) {
+  socket.emit('update_alert_status', { alert_id: alertId, status: 'acknowledged' });
+  showToast('Alert acknowledged', 'success');
+}
+
+function resolveAlert(alertId) {
+  socket.emit('update_alert_status', { alert_id: alertId, status: 'resolved' });
+  showToast('Alert resolved', 'success');
+}
+
+function focusAlert(alertId) {
+  const a = alerts[alertId];
+  if (!a) return;
+
+  // Highlight card
+  document.querySelectorAll('.alert-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('card-' + alertId);
+  if (card) card.classList.add('selected');
+
+  // Pan map
+  if (map && a.latitude && a.longitude) {
+    map.flyTo([a.latitude, a.longitude], 15, { duration: 0.8 });
+    if (alertMarkers[alertId]) alertMarkers[alertId].openPopup();
+  }
+}
+
+/* ─────────────────────────────────────────────────
+   DISPATCH MODAL
+───────────────────────────────────────────────── */
+function openDispatchModal(alertId) {
+  dispatchTargetAlertId = alertId;
+  const shortId = (alertId || '').substring(0, 8);
+  document.getElementById('modal-title').textContent = `Dispatch Responder to Alert #${shortId}`;
+
+  const available = Object.values(responders).filter(r => r.is_available);
+  const container = document.getElementById('modal-responder-list');
+
+  if (!available.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px;">No available responders right now.</div>`;
+  } else {
+    container.innerHTML = available.map((r, i) => `
+      <label class="modal-responder-option">
+        <input type="radio" name="modal-resp" value="${r.responder_id}" ${i === 0 ? 'checked' : ''} />
+        <div class="resp-dot available" style="flex-shrink:0;"></div>
+        <div class="resp-info">
+          <div class="resp-name">${r.name}</div>
+          <div class="resp-meta">${r.type === 'police' ? 'Police' : r.type === 'medical' ? 'Medical' : 'Volunteer'}</div>
+        </div>
+      </label>
+    `).join('');
+  }
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  dispatchTargetAlertId = null;
+}
+
+function confirmDispatch() {
+  const selected = document.querySelector('input[name="modal-resp"]:checked');
+  if (!selected) { showToast('Select a responder first', 'warning'); return; }
+  if (!dispatchTargetAlertId) return;
+
+  socket.emit('dispatch_responder', {
+    alert_id: dispatchTargetAlertId,
+    responder_id: selected.value
+  });
+
+  showToast('Responder dispatched!', 'success');
+  closeModal();
+}
+
+// Quick dispatch from responder panel (picks latest active alert)
+function quickDispatch(responderId) {
+  const activeAlert = Object.values(alerts).find(a => a.status === 'triggered' || a.status === 'acknowledged');
+  if (!activeAlert) { showToast('No active alert to dispatch to', 'warning'); return; }
+  socket.emit('dispatch_responder', { alert_id: activeAlert.alert_id, responder_id: responderId });
+  showToast('Responder dispatched!', 'success');
+}
+
+/* ─────────────────────────────────────────────────
+   CHAT PANEL
+───────────────────────────────────────────────── */
+async function openChatPanel(alertId) {
+  chatAlertId = alertId;
+  const shortId = (alertId || '').substring(0, 8);
+  document.getElementById('chat-title').textContent = `💬 Chat — Alert #${shortId}`;
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('chat-panel').classList.add('open');
+
+  // Load history
+  try {
+    const r = await fetch(`/api/chat/${alertId}`);
+    const d = await r.json();
+    (d.messages || []).forEach(m => appendChatMessage(m));
+  } catch(e) { console.error('loadChat', e); }
+
+  document.getElementById('chat-input').focus();
+}
+
+function closeChatPanel() {
+  document.getElementById('chat-panel').classList.remove('open');
+  chatAlertId = null;
+}
+
+function appendChatMessage(msg) {
+  const container = document.getElementById('chat-messages');
+  const isOp = msg.sender_type === 'operator' || msg.sender_type === 'responder';
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + (isOp ? 'operator' : 'user');
+  div.innerHTML = `
+    <div>${escapeHtml(msg.message)}</div>
+    <div class="chat-msg-meta">${escapeHtml(msg.sender_name || 'Unknown')} · ${formatTimeAgo(msg.timestamp)}</div>
+  `;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text || !chatAlertId) return;
+  input.value = '';
+
+  // Emit via socket (matches server handler send_chat_message)
+  socket.emit('send_chat_message', {
+    alert_id:    chatAlertId,
+    message:     text,
+    sender_type: 'operator',
+    sender_name: 'Command Center'
+  });
+}
+
+/* ─────────────────────────────────────────────────
+   SOUND
+───────────────────────────────────────────────── */
+function playAlertSound() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    oscillator.connect(gain);
+    gain.connect(audioCtx.destination);
+    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.28, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.35);
+
+    // Second beep
+    setTimeout(() => {
+      const ctx2 = new AudioContext();
+      const osc2 = ctx2.createOscillator();
+      const g2   = ctx2.createGain();
+      osc2.connect(g2); g2.connect(ctx2.destination);
+      osc2.frequency.setValueAtTime(660, ctx2.currentTime);
+      g2.gain.setValueAtTime(0.22, ctx2.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.001, ctx2.currentTime + 0.3);
+      osc2.start(); osc2.stop(ctx2.currentTime + 0.3);
+    }, 380);
+  } catch(e) { console.warn('Audio error:', e); }
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  const btn = document.getElementById('btn-sound');
+  btn.textContent = soundEnabled ? '🔊 Sound ON' : '🔇 Sound OFF';
+  if (soundEnabled) btn.classList.add('active');
+  else btn.classList.remove('active');
+}
+
+/* ─────────────────────────────────────────────────
+   RESET DEMO
+───────────────────────────────────────────────── */
+async function resetDemo() {
+  try {
+    await fetch('/api/reset-demo', { method: 'POST' });
+    showToast('Demo reset — reloading…');
+    setTimeout(() => location.reload(), 1000);
+  } catch(e) { console.error(e); }
+}
+
+/* ─────────────────────────────────────────────────
+   AI INSIGHT BANNER
+───────────────────────────────────────────────── */
+function updateAIBanner() {
+  const active = Object.values(alerts).filter(a => ['triggered','acknowledged','dispatched'].includes(a.status));
+  const critCount = active.filter(a => a.threat_level === 'critical').length;
+  const hour = new Date().getHours();
+  const isHighRisk = hour >= 23 || hour <= 2;
+
+  let text = '';
+  if (active.length === 0) {
+    text = 'No active threats detected — system nominal.';
+  } else {
+    const locations = [...new Set(active.map(a => getLocationLabel(a)).filter(Boolean))];
+    const locStr = locations.slice(0,2).join(', ') || 'Delhi';
+    text = `${critCount > 0 ? critCount + ' critical alert' + (critCount > 1 ? 's' : '') + ' — ' : ''}${active.length} cluster${active.length > 1 ? 's' : ''} detected in ${locStr}`;
+    if (isHighRisk) text = `High-risk time window (11PM–2AM) — ${text}`;
+  }
+
+  document.getElementById('ai-insight-text').textContent = text;
+}
+
+/* ─────────────────────────────────────────────────
+   TOAST
+───────────────────────────────────────────────── */
+function showToast(msg, type) {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type === 'success' ? ' success' : type === 'warning' ? ' warning' : '');
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity 0.3s';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 300);
+  }, 3200);
+}
+
+/* ─────────────────────────────────────────────────
+   TITLE FLASH
+───────────────────────────────────────────────── */
+let titleFlashTimer = null;
+function flashTitle(msg) {
+  if (titleFlashTimer) clearInterval(titleFlashTimer);
+  const orig = document.title;
+  let tick = 0;
+  titleFlashTimer = setInterval(() => {
+    document.title = tick++ % 2 === 0 ? msg : orig;
+    if (tick >= 14) { clearInterval(titleFlashTimer); document.title = orig; }
+  }, 900);
+}
+
+/* ─────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────── */
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return 'N/A';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'Just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function formatSeconds(secs) {
+  if (!secs && secs !== 0) return '--';
+  const m = Math.floor(secs / 60);
+  const s = Math.round(secs % 60);
+  return `${m}m ${s}s`;
+}
+
+function getLocationLabel(a) {
+  if (a.latitude && a.longitude) {
+    return `${a.latitude.toFixed(4)}°N, ${a.longitude.toFixed(4)}°E`;
+  }
+  return 'Location unavailable';
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ─────────────────────────────────────────────────
+   BOOT
+───────────────────────────────────────────────── */
+initMap();
+
+// Periodic stats refresh
+setInterval(loadStats, 30000);
+// Periodic alert refresh
+setInterval(() => { loadAlerts(); loadResponders(); }, 45000);
+
+// Browser notification permission
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+</script>
+</body>
+</html>

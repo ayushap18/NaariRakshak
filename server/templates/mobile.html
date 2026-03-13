@@ -1,0 +1,2135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0B0C1E">
+  <title>NaariRakshak</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ─── Reset & Base ────────────────────────────────────────────────── */
+    *, *::before, *::after {
+      margin: 0; padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --primary:   #E53935;
+      --primary-dk:#B71C1C;
+      --primary-lt:#FFEBEE;
+      --success:   #2E7D32;
+      --success-lt:#E8F5E9;
+      --warning:   #FF6F00;
+      --warning-lt:#FFF8E1;
+      --dark:      #0B0C1E;
+      --dark2:     #161828;
+      --surface:   #FFFFFF;
+      --bg:        #FAFAFA;
+      --border:    #E0E0E0;
+      --text:      #212121;
+      --text2:     #616161;
+      --text3:     #9E9E9E;
+      --radius-sm: 10px;
+      --radius:    16px;
+      --radius-lg: 24px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.10);
+      --shadow:    0 4px 16px rgba(0,0,0,.12);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.18);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overscroll-behavior: none;
+    }
+
+    /* ─── App Shell ───────────────────────────────────────────────────── */
+    #app-shell {
+      display: none;
+      flex-direction: column;
+      height: 100dvh;
+      max-width: 390px;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* ─── Splash / Loading ────────────────────────────────────────────── */
+    #splash {
+      position: fixed; inset: 0;
+      background: var(--dark);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+    }
+
+    #splash .logo-mark {
+      font-size: 72px;
+      margin-bottom: 20px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    #splash .app-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 30px; font-weight: 700;
+      color: #fff; letter-spacing: -0.5px;
+    }
+
+    #splash .tagline {
+      color: rgba(255,255,255,.55);
+      font-size: 14px; margin-top: 8px;
+      letter-spacing: 0.3px;
+    }
+
+    #splash .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-top: 48px;
+    }
+
+    @keyframes float {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-8px); }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Views ───────────────────────────────────────────────────────── */
+    .view {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+    .view.active {
+      display: flex;
+    }
+
+    /* ─── View 0: Register ────────────────────────────────────────────── */
+    #view-register {
+      background: linear-gradient(170deg, #0D0E20 0%, #0B0C1E 50%, #12082A 100%);
+      padding: env(safe-area-inset-top, 20px) 28px env(safe-area-inset-bottom, 28px);
+      justify-content: center;
+      gap: 0;
+    }
+
+    #view-register::before {
+      content: '';
+      position: absolute;
+      top: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(229,57,53,0.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    #view-register .reg-logo {
+      font-size: 72px;
+      text-align: center;
+      margin-bottom: 16px;
+      filter: drop-shadow(0 4px 20px rgba(229,57,53,0.5));
+    }
+
+    #view-register .reg-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 28px; font-weight: 700;
+      color: #fff; text-align: center;
+    }
+
+    #view-register .reg-sub {
+      color: rgba(255,255,255,.5);
+      text-align: center; font-size: 14px;
+      margin-top: 6px; margin-bottom: 40px;
+    }
+
+    .reg-field {
+      margin-bottom: 16px;
+    }
+
+    .reg-field label {
+      display: block;
+      color: rgba(255,255,255,.6);
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .reg-field input {
+      width: 100%;
+      background: rgba(255,255,255,.08);
+      border: 1.5px solid rgba(255,255,255,.12);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      font-size: 16px;
+      color: #fff;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .reg-field input::placeholder { color: rgba(255,255,255,.3); }
+    .reg-field input:focus { border-color: var(--primary); }
+
+    .btn-get-started {
+      width: 100%;
+      background: linear-gradient(135deg, #EF5350, var(--primary) 50%, #C62828);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 18px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 17px; font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      box-shadow: 0 6px 24px rgba(229,57,53,.55);
+      transition: transform .15s cubic-bezier(.34,1.56,.64,1), box-shadow .15s;
+      letter-spacing: 0.3px;
+    }
+    .btn-get-started:hover { box-shadow: 0 8px 28px rgba(229,57,53,.6); }
+    .btn-get-started:active { transform: scale(.97); box-shadow: 0 3px 12px rgba(229,57,53,.35); }
+
+    .reg-footer {
+      color: rgba(255,255,255,.3);
+      text-align: center; font-size: 12px;
+      margin-top: 24px;
+    }
+
+    /* ─── Header Bar ──────────────────────────────────────────────────── */
+    .app-header {
+      background: linear-gradient(180deg, #0D0E20 0%, var(--dark) 100%);
+      padding: env(safe-area-inset-top, 0px) 20px 14px;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(229,57,53,0.25);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+
+    .header-brand {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .header-brand .brand-icon {
+      font-size: 22px;
+    }
+
+    .header-brand .brand-name {
+      font-family: 'Poppins', sans-serif;
+      font-size: 16px; font-weight: 700;
+      color: #fff; letter-spacing: -0.2px;
+    }
+
+    .header-right {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .icon-btn {
+      width: 38px; height: 38px;
+      background: rgba(255,255,255,.08);
+      border: none; border-radius: 50%;
+      color: #fff; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .icon-btn:active { background: rgba(255,255,255,.18); }
+
+    /* ─── Status Bar ──────────────────────────────────────────────────── */
+    .status-bar {
+      background: var(--dark2);
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 100px;
+      font-size: 13px; font-weight: 600;
+    }
+
+    .status-pill.safe {
+      background: rgba(46,125,50,.25);
+      color: #81C784;
+    }
+    .status-pill.danger {
+      background: rgba(229,57,53,.25);
+      color: #EF9A9A;
+      animation: status-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes status-pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: .6; }
+    }
+
+    .status-pill .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .loc-badge {
+      display: flex; align-items: center; gap: 5px;
+      color: rgba(255,255,255,.45);
+      font-size: 12px;
+    }
+
+    /* ─── Scrollable Body ─────────────────────────────────────────────── */
+    .view-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px env(safe-area-inset-bottom, 24px);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── Timer Warning Banner ────────────────────────────────────────── */
+    #timer-warning-banner {
+      display: none;
+      background: var(--warning);
+      color: #fff;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 13px; font-weight: 600;
+      animation: status-pulse 0.9s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    #timer-warning-banner.show { display: block; }
+
+    /* ─── SOS Section ─────────────────────────────────────────────────── */
+    .sos-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 0 24px;
+    }
+
+    .sos-ring-wrap {
+      position: relative;
+      width: 196px; height: 196px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Outer pulsing aura */
+    .sos-aura {
+      position: absolute; inset: -14px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(229,57,53,.28) 0%, transparent 70%);
+      animation: sos-aura 2.2s ease-in-out infinite;
+    }
+
+    /* Extra outer ring */
+    .sos-ring-outer {
+      position: absolute;
+      width: 210px; height: 210px;
+      border-radius: 50%;
+      border: 2px solid rgba(229,57,53,0.2);
+      animation: sos-ring-expand 2.5s ease-out infinite;
+    }
+
+    @keyframes sos-ring-expand {
+      0%   { transform: scale(0.85); opacity: 0.6; }
+      100% { transform: scale(1.3);  opacity: 0; }
+    }
+
+    .sos-ring-outer2 {
+      position: absolute;
+      width: 210px; height: 210px;
+      border-radius: 50%;
+      border: 2px solid rgba(229,57,53,0.15);
+      animation: sos-ring-expand 2.5s ease-out infinite 0.8s;
+    }
+
+    @keyframes sos-aura {
+      0%,100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.12); opacity: .6; }
+    }
+
+    /* SVG progress ring */
+    .sos-svg {
+      position: absolute; inset: 0;
+      transform: rotate(-90deg);
+      pointer-events: none;
+    }
+    .sos-ring-bg  { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 4; }
+    .sos-ring-bar {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 565.48;   /* 2π × 90 */
+      stroke-dashoffset: 565.48;  /* starts hidden */
+      transition: stroke-dashoffset .05s linear;
+    }
+
+    /* The actual button */
+    #sos-btn {
+      width: 164px; height: 164px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #FF6B6B 0%, #E53935 45%, #B71C1C 100%);
+      border: 3px solid rgba(255,255,255,0.15);
+      box-shadow:
+        0 0 0 0 rgba(229,57,53,.5),
+        0 8px 32px rgba(229,57,53,0.5),
+        0 20px 60px rgba(229,57,53,0.25),
+        inset 0 2px 4px rgba(255,255,255,0.2);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: pointer;
+      position: relative;
+      z-index: 2;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      transition: transform .1s, box-shadow .1s;
+    }
+    #sos-btn:active {
+      transform: scale(.94);
+      box-shadow:
+        0 0 0 0 rgba(229,57,53,.5),
+        0 4px 16px rgba(229,57,53,0.4),
+        inset 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .sos-btn-label {
+      font-family: 'Poppins', sans-serif;
+      font-size: 40px; font-weight: 900;
+      color: #fff; letter-spacing: 4px;
+      line-height: 1;
+      text-shadow: 0 2px 12px rgba(0,0,0,.4);
+    }
+
+    .sos-btn-hint {
+      font-size: 10px; font-weight: 600;
+      color: rgba(255,255,255,.75);
+      letter-spacing: 1px;
+      margin-top: 6px;
+      text-transform: uppercase;
+    }
+
+    .sos-countdown-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(255,255,255,.85);
+      margin-top: 12px;
+      min-height: 20px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ─── Card ────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+      margin-bottom: 14px;
+      overflow: hidden;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .card:hover { box-shadow: var(--shadow); }
+
+    .card-header {
+      padding: 14px 16px 12px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-header .card-icon { font-size: 20px; }
+
+    .card-header .card-title {
+      font-size: 15px; font-weight: 700;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .card-body { padding: 14px 16px; }
+
+    /* ─── Check-In Timer Card ─────────────────────────────────────────── */
+    .checkin-off {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .checkin-off .off-label {
+      font-size: 13px; color: var(--text3);
+    }
+
+    .checkin-off .off-status {
+      font-size: 22px; font-weight: 800;
+      color: var(--text3); letter-spacing: 1px;
+    }
+
+    .checkin-active {
+      display: none;
+    }
+
+    .checkin-countdown {
+      font-size: 40px; font-weight: 800;
+      color: var(--text);
+      letter-spacing: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .checkin-subtitle {
+      font-size: 12px; color: var(--text3); margin-top: 2px;
+    }
+
+    /* ─── Buttons ─────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      padding: 12px 20px;
+      border: none; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, transform .12s;
+    }
+    .btn:active { opacity: .82; transform: scale(.97); }
+
+    .btn-sm { padding: 8px 14px; font-size: 13px; }
+    .btn-full { width: 100%; }
+
+    .btn-red   { background: var(--primary); color: #fff; }
+    .btn-green { background: var(--success); color: #fff; }
+    .btn-dark  { background: var(--dark); color: #fff; }
+    .btn-ghost {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text);
+    }
+    .btn-warn  { background: var(--warning); color: #fff; }
+
+    /* ─── Quick Actions Grid ──────────────────────────────────────────── */
+    .quick-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .quick-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 12px 18px;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      min-height: 96px;
+      transition: box-shadow .2s, transform .12s, border-color .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .quick-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, rgba(229,57,53,0.4), transparent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .quick-card:hover { border-color: rgba(229,57,53,0.3); box-shadow: var(--shadow); }
+    .quick-card:hover::after { opacity: 1; }
+    .quick-card:active { transform: scale(.95); box-shadow: none; }
+
+    .quick-card .qc-icon { font-size: 30px; }
+    .quick-card .qc-label {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 700;
+      color: var(--text); text-align: center;
+    }
+    .quick-card .qc-sub {
+      font-size: 11px; color: var(--text3);
+      text-align: center;
+    }
+
+    /* ─── Section Title ───────────────────────────────────────────────── */
+    .section-title {
+      font-family: 'Inter', sans-serif;
+      font-size: 12px; font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase; letter-spacing: 1.2px;
+      margin-bottom: 10px; margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ─── View 2: Alert Active ────────────────────────────────────────── */
+    #view-alert {
+      background: var(--bg);
+    }
+
+    .alert-header {
+      background: linear-gradient(180deg, #C62828 0%, var(--primary) 60%, #E53935 100%);
+      padding: env(safe-area-inset-top, 0px) 20px 20px;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+      display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(229,57,53,0.5);
+    }
+
+    .alert-header .alert-badge {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .alert-pulse-dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      animation: alert-blink 1s step-start infinite;
+    }
+    @keyframes alert-blink { 50% { opacity: 0; } }
+
+    .alert-header h1 {
+      color: #fff; font-size: 18px; font-weight: 800;
+      text-align: center;
+    }
+
+    .alert-header .alert-sub {
+      color: rgba(255,255,255,.75);
+      font-size: 13px;
+    }
+
+    /* Map placeholder */
+    .map-placeholder {
+      background: var(--dark);
+      border-radius: var(--radius);
+      height: 160px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .map-placeholder .map-grid {
+      position: absolute; inset: 0;
+      opacity: .08;
+      background-image:
+        linear-gradient(rgba(255,255,255,.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.4) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .map-placeholder .map-label {
+      color: rgba(255,255,255,.6);
+      font-size: 14px; font-weight: 600;
+      position: relative; z-index: 1;
+    }
+
+    .map-placeholder .map-coords {
+      color: rgba(255,255,255,.35);
+      font-size: 11px;
+      position: relative; z-index: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Responder card */
+    #responder-card {
+      display: none;
+    }
+
+    .responder-info {
+      display: flex; align-items: center; gap: 14px;
+    }
+
+    .responder-avatar {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--success-lt);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .responder-meta { flex: 1; }
+
+    .responder-name {
+      font-size: 15px; font-weight: 700; color: var(--text);
+    }
+
+    .responder-type {
+      font-size: 12px; color: var(--text3); margin-top: 2px;
+    }
+
+    .responder-eta {
+      text-align: right;
+    }
+    .responder-eta .eta-val {
+      font-size: 22px; font-weight: 800; color: var(--success);
+    }
+    .responder-eta .eta-label {
+      font-size: 10px; color: var(--text3); text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Chat */
+    #chat-section {
+      display: none;
+    }
+
+    .chat-messages {
+      max-height: 250px;
+      overflow-y: auto;
+      padding: 8px 0;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    .chat-msg {
+      max-width: 80%;
+      padding: 9px 13px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .chat-msg.user {
+      align-self: flex-end;
+      background: var(--primary);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-msg.responder {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    .chat-msg .msg-time {
+      font-size: 10px;
+      opacity: .6;
+      margin-top: 3px;
+    }
+
+    .quick-replies {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 8px 0;
+    }
+
+    .quick-reply-btn {
+      background: var(--primary-lt);
+      border: 1.5px solid #FFCDD2;
+      border-radius: 100px;
+      padding: 6px 14px;
+      font-size: 12px; font-weight: 600;
+      color: var(--primary);
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .quick-reply-btn:active { background: #FFCDD2; }
+
+    .chat-input-row {
+      display: flex; gap: 8px; align-items: center;
+      margin-top: 10px;
+    }
+
+    .chat-input-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 14px;
+      outline: none;
+      color: var(--text);
+    }
+    .chat-input-row input:focus { border-color: var(--primary); }
+
+    .chat-send-btn {
+      width: 44px; height: 44px;
+      background: var(--primary);
+      border: none; border-radius: 50%;
+      color: #fff; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .chat-send-btn:active { opacity: .8; }
+
+    /* ─── Alert History Items ─────────────────────────────────────────── */
+    .alert-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      border-left: 4px solid var(--primary);
+    }
+    .alert-item.resolved { border-left-color: var(--success); }
+    .alert-item.cancelled { border-left-color: var(--text3); }
+
+    .alert-item-top {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; margin-bottom: 8px;
+    }
+
+    .alert-item-id {
+      font-size: 13px; font-weight: 700; color: var(--text);
+    }
+
+    .status-chip {
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-chip.active    { background: var(--primary-lt); color: var(--primary); }
+    .status-chip.resolved  { background: var(--success-lt); color: var(--success); }
+    .status-chip.cancelled { background: #F5F5F5; color: var(--text3); }
+
+    .alert-item-meta {
+      font-size: 12px; color: var(--text3);
+      display: flex; flex-direction: column; gap: 3px;
+    }
+
+    /* ─── Modals ──────────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 800;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal-sheet {
+      background: var(--surface);
+      width: 100%; max-width: 390px;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      padding: 12px 20px 28px;
+      animation: sheet-up .25s ease;
+    }
+    @keyframes sheet-up {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+
+    .sheet-handle {
+      width: 40px; height: 4px;
+      background: var(--border);
+      border-radius: 100px;
+      margin: 0 auto 20px;
+    }
+
+    .sheet-title {
+      font-size: 18px; font-weight: 800;
+      color: var(--text); margin-bottom: 16px;
+    }
+
+    /* Danger zone modal */
+    .form-row { margin-bottom: 14px; }
+
+    .form-row label {
+      display: block;
+      font-size: 12px; font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+
+    .form-row input,
+    .form-row select,
+    .form-row textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+    }
+    .form-row input:focus,
+    .form-row select:focus,
+    .form-row textarea:focus { border-color: var(--primary); }
+
+    .form-row textarea { resize: none; min-height: 80px; }
+
+    .loc-preview {
+      background: var(--dark);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .loc-preview .lp-icon { font-size: 18px; }
+    .loc-preview .lp-coords {
+      font-size: 13px; color: rgba(255,255,255,.7);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Timer modal presets */
+    .timer-presets {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .preset-btn {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      font-size: 16px; font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+      text-align: center;
+      transition: border-color .15s, background .15s;
+    }
+    .preset-btn:active { background: var(--primary-lt); border-color: var(--primary); }
+
+    .custom-timer-row {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+    .custom-timer-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 16px; color: var(--text);
+      outline: none;
+    }
+    .custom-timer-row input:focus { border-color: var(--primary); }
+
+    /* ─── Toast ───────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+      left: 50%; transform: translateX(-50%) translateY(80px);
+      background: var(--dark);
+      color: #fff;
+      padding: 12px 22px;
+      border-radius: 100px;
+      font-size: 14px; font-weight: 600;
+      white-space: nowrap;
+      z-index: 9000;
+      transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+      opacity: 0;
+      pointer-events: none;
+      max-width: 340px;
+      text-align: center;
+    }
+    #toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ─── Empty State ─────────────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text3);
+    }
+    .empty-state .es-icon { font-size: 52px; margin-bottom: 12px; }
+    .empty-state .es-title { font-size: 16px; font-weight: 700; color: var(--text2); margin-bottom: 6px; }
+    .empty-state .es-sub { font-size: 13px; }
+
+    /* ─── Help Arrived Banner ─────────────────────────────────────────── */
+    #help-arrived-banner {
+      display: none;
+      background: var(--success);
+      color: #fff;
+      padding: 14px 20px;
+      text-align: center;
+      font-size: 15px; font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ─── Utility ─────────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    .mt-8 { margin-top: 8px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+
+    /* Divider */
+    .divider {
+      height: 1px; background: var(--border);
+      margin: 12px 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     SPLASH SCREEN
+═══════════════════════════════════════════════════════════════════════ -->
+<div id="splash">
+  <div class="logo-mark">🛡️</div>
+  <div class="app-title">NaariRakshak</div>
+  <div class="tagline">Your safety, our priority</div>
+  <div class="spinner"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════════════════════════ -->
+<div id="app-shell">
+
+  <!-- ── VIEW 0: REGISTRATION ─────────────────────────────────────── -->
+  <div id="view-register" class="view">
+    <div class="reg-logo">🛡️</div>
+    <div class="reg-title">NaariRakshak</div>
+    <div class="reg-sub">Your safety, our priority</div>
+
+    <div class="reg-field">
+      <label>Your Name</label>
+      <input type="text" id="reg-name" placeholder="Full name" autocomplete="name">
+    </div>
+    <div class="reg-field">
+      <label>Phone Number</label>
+      <input type="tel" id="reg-phone" placeholder="+91 9876543210" autocomplete="tel">
+    </div>
+
+    <button class="btn-get-started" id="reg-submit-btn" onclick="handleRegister()">
+      Get Started &rarr;
+    </button>
+
+    <div class="reg-footer">By continuing you agree to our Terms &amp; Privacy Policy</div>
+  </div>
+
+  <!-- ── VIEW 1: HOME ─────────────────────────────────────────────── -->
+  <div id="view-home" class="view">
+    <!-- Header -->
+    <div class="app-header">
+      <div class="header-brand">
+        <span class="brand-icon">🛡️</span>
+        <span class="brand-name">NaariRakshak</span>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn" title="Settings" onclick="showToast('Settings coming soon')">⚙️</button>
+        <button class="icon-btn" title="Logout" onclick="handleLogout()">↩</button>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div id="home-status-pill" class="status-pill safe">
+        <div class="dot"></div>
+        <span id="home-status-text">You are safe</span>
+      </div>
+      <div class="loc-badge">
+        <span>📍</span>
+        <span id="home-loc-text">Locating…</span>
+      </div>
+    </div>
+
+    <!-- Timer warning banner -->
+    <div id="timer-warning-banner">
+      ⏰ Check in now! 1 minute remaining
+    </div>
+
+    <!-- Scrollable body -->
+    <div class="view-body">
+
+      <!-- SOS Section -->
+      <div class="sos-section">
+        <div class="sos-ring-wrap">
+          <div class="sos-aura"></div>
+          <div class="sos-ring-outer"></div>
+          <div class="sos-ring-outer2"></div>
+          <svg class="sos-svg" viewBox="0 0 196 196">
+            <circle class="sos-ring-bg" cx="98" cy="98" r="90"/>
+            <circle class="sos-ring-bar" id="sos-ring" cx="98" cy="98" r="90"/>
+          </svg>
+          <button id="sos-btn"
+                  onpointerdown="onSosDown()"
+                  onpointerup="onSosUp()"
+                  onpointerleave="onSosUp()"
+                  oncontextmenu="return false;">
+            <span class="sos-btn-label">SOS</span>
+            <span class="sos-btn-hint">HOLD FOR HELP</span>
+          </button>
+        </div>
+        <div class="sos-countdown-text" id="sos-countdown-text"></div>
+      </div>
+
+      <!-- Check-In Timer Card -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⏱️</span>
+          <span class="card-title">Safe Check-In Timer</span>
+          <span id="checkin-status-badge" style="font-size:12px;color:var(--text3);font-weight:600;">OFF</span>
+        </div>
+        <div class="card-body">
+          <!-- Off state -->
+          <div id="checkin-off-state" class="checkin-off">
+            <div>
+              <div class="off-status">—</div>
+              <div class="off-label">No timer active</div>
+            </div>
+            <button class="btn btn-dark btn-sm" onclick="openTimerModal()">Set Timer</button>
+          </div>
+          <!-- Active state -->
+          <div id="checkin-active-state" class="checkin-active">
+            <div class="checkin-countdown" id="checkin-countdown">00:00</div>
+            <div class="checkin-subtitle">Remaining until alert triggers</div>
+            <div style="display:flex;gap:8px;margin-top:14px;">
+              <button class="btn btn-green" style="flex:1;" onclick="doCheckin()">✓ I'm Safe — Check In</button>
+              <button class="btn btn-ghost btn-sm" onclick="cancelCheckinTimer()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="section-title">Quick Actions</div>
+      <div class="quick-grid">
+        <div class="quick-card" onclick="shareLocation()">
+          <div class="qc-icon">📍</div>
+          <div class="qc-label">Share Location</div>
+          <div class="qc-sub">Send to contacts</div>
+        </div>
+        <div class="quick-card" onclick="openDangerZoneModal()">
+          <div class="qc-icon">⚠️</div>
+          <div class="qc-label">Report Danger Zone</div>
+          <div class="qc-sub">Flag unsafe areas</div>
+        </div>
+        <div class="quick-card" onclick="showAlertHistory()">
+          <div class="qc-icon">📋</div>
+          <div class="qc-label">My Alerts</div>
+          <div class="qc-sub">View past alerts</div>
+        </div>
+        <div class="quick-card" onclick="showToast('Contacts feature coming soon')">
+          <div class="qc-icon">👥</div>
+          <div class="qc-label">My Contacts</div>
+          <div class="qc-sub">Trusted people</div>
+        </div>
+      </div>
+
+      <!-- Alert History (inline, hidden by default) -->
+      <div id="alert-history-section" class="hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="section-title" style="margin:0;">Alert History</div>
+          <button class="btn btn-ghost btn-sm" onclick="hideAlertHistory()">Close</button>
+        </div>
+        <div id="alert-history-list">
+          <div class="empty-state">
+            <div class="es-icon">📋</div>
+            <div class="es-title">No alerts yet</div>
+            <div class="es-sub">Your emergency alerts will appear here</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /view-body -->
+  </div>
+
+  <!-- ── VIEW 2: ALERT ACTIVE ─────────────────────────────────────── -->
+  <div id="view-alert" class="view">
+    <!-- Alert header -->
+    <div class="alert-header">
+      <div class="alert-badge">
+        <div class="alert-pulse-dot"></div>
+        <h1>ALERT ACTIVE</h1>
+      </div>
+      <div class="alert-sub">Help is on the way</div>
+    </div>
+
+    <!-- Help arrived banner (hidden until resolved) -->
+    <div id="help-arrived-banner">
+      ✅ Help has arrived — You are safe now
+    </div>
+
+    <!-- Scrollable body -->
+    <div class="view-body">
+
+      <!-- Map placeholder -->
+      <div class="map-placeholder">
+        <div class="map-grid"></div>
+        <div style="font-size:32px;position:relative;z-index:1;">📍</div>
+        <div class="map-label">Tracking your location</div>
+        <div class="map-coords" id="alert-coords-display">Acquiring GPS…</div>
+      </div>
+
+      <!-- Responder card (hidden until dispatched) -->
+      <div id="responder-card" class="card">
+        <div class="card-header">
+          <span class="card-icon">🚒</span>
+          <span class="card-title">Responder Dispatched</span>
+        </div>
+        <div class="card-body">
+          <div class="responder-info">
+            <div class="responder-avatar" id="responder-avatar">👮</div>
+            <div class="responder-meta">
+              <div class="responder-name" id="responder-name">—</div>
+              <div class="responder-type" id="responder-type">—</div>
+            </div>
+            <div class="responder-eta">
+              <div class="eta-val" id="responder-eta">—</div>
+              <div class="eta-label">ETA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat section (hidden until responder assigned) -->
+      <div id="chat-section" class="card">
+        <div class="card-header">
+          <span class="card-icon">💬</span>
+          <span class="card-title">Chat with Responder</span>
+        </div>
+        <div class="card-body">
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg responder">
+              <div>Hi, I have been dispatched to your location. Stay calm and stay on the line.</div>
+              <div class="msg-time">Just now</div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="quick-replies">
+            <button class="quick-reply-btn" onclick="sendQuickReply('I\'m safe now ✓')">I'm safe now ✓</button>
+            <button class="quick-reply-btn" onclick="sendQuickReply('Still in danger ⚠️')">Still in danger ⚠️</button>
+            <button class="quick-reply-btn" onclick="sendQuickReply('Hurry please 🆘')">Hurry please 🆘</button>
+          </div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendChatMessage()">
+            <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cancel alert -->
+      <button class="btn btn-full btn-ghost mt-8" id="cancel-alert-btn" onclick="cancelAlert()"
+              style="border-color:var(--primary);color:var(--primary);">
+        Cancel Alert — I Am Safe
+      </button>
+
+    </div><!-- /view-body -->
+  </div>
+
+</div><!-- /app-shell -->
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     MODAL: DANGER ZONE
+═══════════════════════════════════════════════════════════════════════ -->
+<div id="modal-dangerzone" class="modal-overlay" onclick="closeDangerZoneIfOutside(event)">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">⚠️ Report Danger Zone</div>
+
+    <div class="loc-preview">
+      <span class="lp-icon">📍</span>
+      <span class="lp-coords" id="dz-coords-text">Acquiring location…</span>
+    </div>
+
+    <div class="form-row">
+      <label>Category</label>
+      <select id="dz-category">
+        <option value="harassment">Harassment</option>
+        <option value="poor_lighting">Poor Lighting</option>
+        <option value="isolated">Isolated / Deserted Area</option>
+        <option value="crime_prone">Crime-Prone Zone</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>Description (optional)</label>
+      <textarea id="dz-description" placeholder="Describe what you noticed…"></textarea>
+    </div>
+
+    <button class="btn btn-red btn-full" onclick="submitDangerZone()">Report Danger Zone</button>
+    <button class="btn btn-ghost btn-full mt-8" onclick="closeDangerZoneModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     MODAL: CHECK-IN TIMER
+═══════════════════════════════════════════════════════════════════════ -->
+<div id="modal-timer" class="modal-overlay" onclick="closeTimerIfOutside(event)">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">⏱️ Set Check-In Timer</div>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:16px;">
+      If you don't check in within the set time, an SOS will be triggered automatically.
+    </p>
+
+    <div class="timer-presets">
+      <button class="preset-btn" onclick="setTimer(5)">5 min</button>
+      <button class="preset-btn" onclick="setTimer(15)">15 min</button>
+      <button class="preset-btn" onclick="setTimer(30)">30 min</button>
+      <button class="preset-btn" onclick="setTimer(60)">60 min</button>
+    </div>
+
+    <div class="divider"></div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;">Custom Duration</p>
+    <div class="custom-timer-row">
+      <input type="number" id="custom-timer-input" placeholder="Minutes" min="1" max="1440">
+      <button class="btn btn-red" onclick="setCustomTimer()">Set Custom</button>
+    </div>
+
+    <button class="btn btn-ghost btn-full mt-12" onclick="closeTimerModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     TOAST
+═══════════════════════════════════════════════════════════════════════ -->
+<div id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     SCRIPTS
+═══════════════════════════════════════════════════════════════════════ -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+/* ====================================================================
+   STATE
+==================================================================== */
+let userId        = null;
+let userName      = null;
+let userPhone     = null;
+let currentAlertId = null;
+let currentLat    = null;
+let currentLon    = null;
+let socket        = null;
+let geoWatchId    = null;
+
+// Check-in timer state
+let checkinEndTime    = null;   // Date object when timer expires
+let checkinInterval   = null;   // setInterval for countdown display
+let checkinDuration   = null;   // total minutes
+
+// SOS hold state
+let sosHoldTimer      = null;
+let sosAnimFrame      = null;
+let sosHoldStart      = null;
+const SOS_HOLD_MS     = 3000;
+
+// Audio evidence
+let mediaRecorder  = null;
+let audioChunks    = [];
+
+/* ====================================================================
+   BOOT
+==================================================================== */
+window.addEventListener('load', () => {
+  // Brief splash then initialise
+  setTimeout(boot, 600);
+});
+
+function boot() {
+  userId    = localStorage.getItem('user_id');
+  userName  = localStorage.getItem('user_name');
+  userPhone = localStorage.getItem('user_phone');
+
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'flex';
+
+  if (userId && userName) {
+    showView('view-home');
+    afterLogin();
+  } else {
+    showView('view-register');
+  }
+}
+
+/* ====================================================================
+   VIEW ROUTING
+==================================================================== */
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ====================================================================
+   REGISTRATION
+==================================================================== */
+async function handleRegister() {
+  const nameEl  = document.getElementById('reg-name');
+  const phoneEl = document.getElementById('reg-phone');
+  const name    = nameEl.value.trim();
+  const phone   = phoneEl.value.trim();
+
+  if (!name) { showToast('Please enter your name'); nameEl.focus(); return; }
+  if (!phone) { showToast('Please enter your phone number'); phoneEl.focus(); return; }
+
+  const btn = document.getElementById('reg-submit-btn');
+  btn.textContent = 'Registering…';
+  btn.disabled = true;
+
+  try {
+    const res  = await fetch('/api/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, phone })
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      userId    = data.user.id;
+      userName  = data.user.name || name;
+      userPhone = data.user.phone_full || phone;
+      localStorage.setItem('user_id',    userId);
+      localStorage.setItem('user_name',  userName);
+      localStorage.setItem('user_phone', userPhone);
+      showView('view-home');
+      afterLogin();
+    } else {
+      showToast(data.error || 'Registration failed. Try again.');
+    }
+  } catch {
+    showToast('Network error. Please check your connection.');
+  } finally {
+    btn.textContent = 'Get Started →';
+    btn.disabled = false;
+  }
+}
+
+function handleLogout() {
+  if (currentAlertId) { showToast('Cancel your active alert before logging out.'); return; }
+  if (!confirm('Log out of NaariRakshak?')) return;
+
+  stopGeo();
+  if (socket) socket.disconnect();
+  stopCheckinTimer();
+
+  localStorage.removeItem('user_id');
+  localStorage.removeItem('user_name');
+  localStorage.removeItem('user_phone');
+  userId = userName = userPhone = null;
+  currentAlertId = null;
+
+  showView('view-register');
+  document.getElementById('reg-name').value  = '';
+  document.getElementById('reg-phone').value = '';
+}
+
+/* ====================================================================
+   POST-LOGIN SETUP
+==================================================================== */
+function afterLogin() {
+  startGeo();
+  connectSocket();
+  requestNotificationPermission();
+}
+
+/* ====================================================================
+   GEOLOCATION
+==================================================================== */
+function startGeo() {
+  if (!navigator.geolocation) {
+    setLocBadge('Not supported');
+    return;
+  }
+
+  geoWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      currentLat = pos.coords.latitude;
+      currentLon = pos.coords.longitude;
+      setLocBadge('Active ✓');
+
+      // Keep dashboard coords updated during active alert
+      const cd = document.getElementById('alert-coords-display');
+      if (cd) cd.textContent = `${currentLat.toFixed(5)}, ${currentLon.toFixed(5)}`;
+
+      // Push location update during active alert
+      if (currentAlertId && socket && socket.connected) {
+        socket.emit('location_update', {
+          alert_id:  currentAlertId,
+          latitude:  currentLat,
+          longitude: currentLon,
+          accuracy:  pos.coords.accuracy
+        });
+      }
+    },
+    err => {
+      if (err.code === 1) setLocBadge('Denied');
+      else if (err.code === 2) setLocBadge('Unavailable');
+      else setLocBadge('Timeout');
+    },
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+  );
+}
+
+function stopGeo() {
+  if (geoWatchId !== null) {
+    navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = null;
+  }
+}
+
+function setLocBadge(text) {
+  const el = document.getElementById('home-loc-text');
+  if (el) el.textContent = text;
+}
+
+/* ====================================================================
+   SOCKET.IO
+==================================================================== */
+function connectSocket() {
+  socket = io();
+
+  socket.on('connect', () => {
+    if (userId) socket.emit('user_register', { user_id: userId });
+  });
+
+  socket.on('alert_triggered', data => {
+    currentAlertId = data.alert_id || data.alert?.alert_id;
+    switchToAlertView();
+    vibrate([500,200,500,200,500]);
+    // Start audio capture 3 seconds after SOS
+    setTimeout(startAudioCapture, 3000);
+  });
+
+  socket.on('responder_dispatched', data => {
+    vibrate([200,100,200]);
+    showResponderCard(data);
+    showChatSection();
+  });
+
+  socket.on('alert_cancelled', () => {
+    currentAlertId = null;
+    returnHome(false);
+  });
+
+  socket.on('alert_status_changed', data => {
+    if (data.alert_id === currentAlertId) {
+      if (data.status === 'resolved') {
+        showHelpArrived();
+      } else if (data.status === 'cancelled') {
+        currentAlertId = null;
+        returnHome(false);
+      }
+    }
+  });
+
+  socket.on('timer_warning', () => {
+    showTimerWarningBanner();
+    vibrate([300,100,300]);
+  });
+
+  socket.on('new_chat_message', data => {
+    if (data.alert_id === currentAlertId && data.sender_type !== 'user') {
+      appendChatMessage(data.message, 'responder');
+    }
+  });
+}
+
+/* ====================================================================
+   SOS HOLD-TO-TRIGGER
+==================================================================== */
+function onSosDown() {
+  if (currentAlertId) return; // Already active
+
+  sosHoldStart = Date.now();
+  const ring = document.getElementById('sos-ring');
+  const countdownEl = document.getElementById('sos-countdown-text');
+  const circumference = 565.48;
+
+  ring.style.transition = 'none';
+  ring.style.strokeDashoffset = circumference;
+
+  countdownEl.textContent = 'Hold to trigger SOS…';
+
+  function animateRing() {
+    const elapsed  = Date.now() - sosHoldStart;
+    const fraction = Math.min(elapsed / SOS_HOLD_MS, 1);
+    const offset   = circumference * (1 - fraction);
+    const remaining = Math.ceil((SOS_HOLD_MS - elapsed) / 1000);
+
+    ring.style.strokeDashoffset = offset;
+    countdownEl.textContent = fraction < 1
+      ? `Triggering in ${remaining}s…`
+      : '';
+
+    if (fraction < 1) {
+      sosAnimFrame = requestAnimationFrame(animateRing);
+    }
+  }
+
+  sosAnimFrame = requestAnimationFrame(animateRing);
+
+  sosHoldTimer = setTimeout(() => {
+    resetSosRing();
+    triggerSOS();
+  }, SOS_HOLD_MS);
+}
+
+function onSosUp() {
+  if (!sosHoldStart) return;
+  clearTimeout(sosHoldTimer);
+  cancelAnimationFrame(sosAnimFrame);
+  sosHoldStart = null;
+  resetSosRing();
+  document.getElementById('sos-countdown-text').textContent = '';
+}
+
+function resetSosRing() {
+  const ring = document.getElementById('sos-ring');
+  ring.style.transition = 'stroke-dashoffset .4s ease';
+  ring.style.strokeDashoffset = 565.48;
+}
+
+async function triggerSOS() {
+  try {
+    vibrate([500,200,500,200,500]);
+
+    const body = {
+      user_id:        userId,
+      phone:          userPhone,
+      latitude:       currentLat,
+      longitude:      currentLon,
+      trigger_method: 'button_hold',
+      device_info:    navigator.userAgent
+    };
+
+    // Also emit via socket for real-time
+    if (socket && socket.connected) {
+      socket.emit('trigger_sos', {
+        user_id:        userId,
+        latitude:       currentLat,
+        longitude:      currentLon,
+        trigger_method: 'button_hold',
+        device_info:    navigator.userAgent
+      });
+    }
+
+    const res  = await fetch('/api/sos/trigger', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify(body)
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      currentAlertId = data.alert?.alert_id || data.alert_id;
+      switchToAlertView();
+      setTimeout(startAudioCapture, 3000);
+    } else {
+      if (data.error && data.error.includes('User not found')) {
+        showToast('Account not found. Please re-register.');
+        handleLogout();
+      } else {
+        showToast(data.error || 'Failed to trigger SOS');
+      }
+    }
+  } catch {
+    showToast('Connection error. Retrying…');
+  }
+}
+
+/* ====================================================================
+   ALERT VIEW
+==================================================================== */
+function switchToAlertView() {
+  showView('view-alert');
+  setHomeStatus('danger', 'Alert Active');
+  document.getElementById('help-arrived-banner').style.display = 'none';
+  document.getElementById('alert-coords-display').textContent =
+    currentLat ? `${currentLat.toFixed(5)}, ${currentLon.toFixed(5)}` : 'Acquiring GPS…';
+}
+
+function returnHome(showSafe) {
+  showView('view-home');
+  setHomeStatus('safe', 'You are safe');
+  if (showSafe) showToast('You are safe. Stay alert.');
+  loadAlertHistory();
+}
+
+function showHelpArrived() {
+  document.getElementById('help-arrived-banner').style.display = 'block';
+  vibrate([300,100,300,100,300]);
+  setTimeout(() => {
+    currentAlertId = null;
+    returnHome(true);
+  }, 4000);
+}
+
+async function cancelAlert() {
+  if (!currentAlertId) return;
+  if (!confirm('Cancel this emergency alert? Only confirm if you are truly safe.')) return;
+
+  const btn = document.getElementById('cancel-alert-btn');
+  btn.disabled = true;
+  btn.textContent = 'Cancelling…';
+
+  try {
+    const res = await fetch('/api/sos/cancel', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ alert_id: currentAlertId })
+    });
+
+    if (res.ok) {
+      currentAlertId = null;
+      stopAudioCapture();
+      returnHome(false);
+      showToast('Alert cancelled. Stay safe.');
+    } else {
+      showToast('Failed to cancel. Please try again.');
+    }
+  } catch {
+    showToast('Network error. Try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Cancel Alert — I Am Safe';
+  }
+}
+
+function setHomeStatus(type, text) {
+  const pill = document.getElementById('home-status-pill');
+  const span = document.getElementById('home-status-text');
+  pill.className = 'status-pill ' + type;
+  span.textContent = text;
+}
+
+/* ====================================================================
+   RESPONDER CARD
+==================================================================== */
+function showResponderCard(data) {
+  const card = document.getElementById('responder-card');
+  card.style.display = 'block';
+
+  const r = data.responder || data;
+  document.getElementById('responder-name').textContent = r.name || 'Responder';
+  document.getElementById('responder-type').textContent = r.type || r.responder_type || 'Emergency Responder';
+
+  const avatarMap = {
+    police: '👮', medical: '🚑', fire: '🚒', volunteer: '🦺'
+  };
+  const rtype = (r.type || r.responder_type || '').toLowerCase();
+  document.getElementById('responder-avatar').textContent = avatarMap[rtype] || '🚒';
+
+  const eta = r.eta_minutes || r.eta || '—';
+  document.getElementById('responder-eta').textContent =
+    typeof eta === 'number' ? `${eta} min` : eta;
+}
+
+/* ====================================================================
+   CHAT
+==================================================================== */
+function showChatSection() {
+  document.getElementById('chat-section').style.display = 'block';
+}
+
+function appendChatMessage(text, senderType) {
+  const box = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + senderType;
+  const now = new Date();
+  div.innerHTML = `<div>${escapeHtml(text)}</div><div class="msg-time">${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}</div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text || !currentAlertId) return;
+
+  input.value = '';
+  appendChatMessage(text, 'user');
+
+  if (socket && socket.connected) {
+    socket.emit('send_chat_message', {
+      alert_id:    currentAlertId,
+      sender_type: 'user',
+      message:     text
+    });
+  }
+}
+
+function sendQuickReply(text) {
+  document.getElementById('chat-input').value = text;
+  sendChatMessage();
+}
+
+/* ====================================================================
+   SHARE LOCATION
+==================================================================== */
+function shareLocation() {
+  if (!currentLat || !currentLon) {
+    showToast('Waiting for GPS fix…');
+    return;
+  }
+
+  const url = `https://maps.google.com/?q=${currentLat},${currentLon}`;
+
+  if (socket && socket.connected) {
+    socket.emit('location_update', {
+      user_id:   userId,
+      latitude:  currentLat,
+      longitude: currentLon
+    });
+  }
+
+  if (navigator.share) {
+    navigator.share({
+      title: 'My Live Location — NaariRakshak',
+      text:  'I am sharing my real-time location with you via NaariRakshak.',
+      url
+    }).catch(() => copyText(url));
+  } else {
+    copyText(url);
+  }
+}
+
+function copyText(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text)
+      .then(() => showToast('Location link copied!'))
+      .catch(() => showToast('Copy: ' + text));
+  } else {
+    showToast('Location: ' + text);
+  }
+}
+
+/* ====================================================================
+   DANGER ZONE MODAL
+==================================================================== */
+function openDangerZoneModal() {
+  const el = document.getElementById('dz-coords-text');
+  if (currentLat && currentLon) {
+    el.textContent = `${currentLat.toFixed(5)}, ${currentLon.toFixed(5)}`;
+  } else {
+    el.textContent = 'GPS not available — enable location';
+  }
+  document.getElementById('modal-dangerzone').classList.add('open');
+}
+
+function closeDangerZoneModal() {
+  document.getElementById('modal-dangerzone').classList.remove('open');
+}
+
+function closeDangerZoneIfOutside(e) {
+  if (e.target === document.getElementById('modal-dangerzone')) closeDangerZoneModal();
+}
+
+async function submitDangerZone() {
+  if (!currentLat || !currentLon) {
+    showToast('Enable location services to report a danger zone');
+    return;
+  }
+
+  const category    = document.getElementById('dz-category').value;
+  const description = document.getElementById('dz-description').value.trim();
+
+  try {
+    const res = await fetch('/api/danger-zones', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        latitude:    currentLat,
+        longitude:   currentLon,
+        category,
+        description,
+        reported_by: userId
+      })
+    });
+
+    if (res.ok) {
+      closeDangerZoneModal();
+      document.getElementById('dz-description').value = '';
+      showToast('Thank you for keeping your community safe 🙏');
+    } else {
+      const d = await res.json();
+      showToast(d.error || 'Failed to submit report');
+    }
+  } catch {
+    showToast('Network error. Please try again.');
+  }
+}
+
+/* ====================================================================
+   CHECK-IN TIMER
+==================================================================== */
+function openTimerModal() {
+  document.getElementById('modal-timer').classList.add('open');
+}
+
+function closeTimerModal() {
+  document.getElementById('modal-timer').classList.remove('open');
+}
+
+function closeTimerIfOutside(e) {
+  if (e.target === document.getElementById('modal-timer')) closeTimerModal();
+}
+
+async function setTimer(minutes) {
+  closeTimerModal();
+  await postTimer(minutes);
+}
+
+function setCustomTimer() {
+  const val = parseInt(document.getElementById('custom-timer-input').value, 10);
+  if (!val || val < 1) { showToast('Enter a valid number of minutes'); return; }
+  closeTimerModal();
+  postTimer(val);
+}
+
+async function postTimer(minutes) {
+  try {
+    const res = await fetch('/api/checkin-timer', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ user_id: userId, duration_minutes: minutes })
+    });
+
+    if (res.ok) {
+      checkinDuration = minutes;
+      checkinEndTime  = new Date(Date.now() + minutes * 60 * 1000);
+      startCheckinCountdown();
+      showToast(`Check-in timer set for ${minutes} min`);
+    } else {
+      const d = await res.json();
+      showToast(d.error || 'Failed to set timer');
+    }
+  } catch {
+    showToast('Network error. Please try again.');
+  }
+}
+
+function startCheckinCountdown() {
+  stopCheckinTimer();
+
+  document.getElementById('checkin-off-state').style.display = 'none';
+  document.getElementById('checkin-active-state').style.display = 'block';
+  document.getElementById('checkin-status-badge').textContent = 'ON';
+  document.getElementById('checkin-status-badge').style.color = 'var(--success)';
+
+  // Immediately update display
+  updateCheckinDisplay();
+
+  checkinInterval = setInterval(() => {
+    if (!checkinEndTime) { stopCheckinTimer(); return; }
+    const remaining = checkinEndTime - Date.now();
+    if (remaining <= 0) {
+      stopCheckinTimer();
+      showToast('Check-in time expired — triggering SOS');
+      triggerSOS();
+      return;
+    }
+    updateCheckinDisplay();
+  }, 1000);
+}
+
+function updateCheckinDisplay() {
+  if (!checkinEndTime) return;
+  const remaining = Math.max(0, checkinEndTime - Date.now());
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  document.getElementById('checkin-countdown').textContent =
+    `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+}
+
+async function doCheckin() {
+  try {
+    const res = await fetch('/api/checkin', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ user_id: userId })
+    });
+
+    if (res.ok) {
+      stopCheckinTimer();
+      showToast('Check-in successful! Stay safe.');
+    } else {
+      showToast('Check-in failed. Please try again.');
+    }
+  } catch {
+    showToast('Network error. Please try again.');
+  }
+}
+
+function cancelCheckinTimer() {
+  stopCheckinTimer();
+  showToast('Check-in timer cancelled.');
+}
+
+function stopCheckinTimer() {
+  clearInterval(checkinInterval);
+  checkinInterval = null;
+  checkinEndTime  = null;
+  checkinDuration = null;
+
+  document.getElementById('checkin-off-state').style.display = 'flex';
+  document.getElementById('checkin-active-state').style.display = 'none';
+  document.getElementById('checkin-status-badge').textContent = 'OFF';
+  document.getElementById('checkin-status-badge').style.color = 'var(--text3)';
+  document.getElementById('timer-warning-banner').classList.remove('show');
+}
+
+function showTimerWarningBanner() {
+  const b = document.getElementById('timer-warning-banner');
+  b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 60000);
+}
+
+/* ====================================================================
+   ALERT HISTORY
+==================================================================== */
+function showAlertHistory() {
+  const section = document.getElementById('alert-history-section');
+  section.classList.remove('hidden');
+  loadAlertHistory();
+  section.scrollIntoView({ behavior: 'smooth' });
+}
+
+function hideAlertHistory() {
+  document.getElementById('alert-history-section').classList.add('hidden');
+}
+
+async function loadAlertHistory() {
+  try {
+    const res  = await fetch('/api/alerts');
+    const data = await res.json();
+    if (!res.ok || !data.alerts) return;
+
+    // Filter to current user's alerts
+    const myAlerts = data.alerts.filter(a =>
+      a.user && (a.user.id === userId || a.user.phone === userPhone)
+    );
+    renderAlertHistory(myAlerts);
+  } catch {
+    // Silently fail — not critical
+  }
+}
+
+function renderAlertHistory(alerts) {
+  const el = document.getElementById('alert-history-list');
+  if (!alerts.length) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="es-icon">📋</div>
+        <div class="es-title">No alerts yet</div>
+        <div class="es-sub">Your emergency alerts will appear here</div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = alerts.map(a => `
+    <div class="alert-item ${a.status}">
+      <div class="alert-item-top">
+        <div class="alert-item-id">Alert #${a.alert_id.substring(0, 8).toUpperCase()}</div>
+        <div class="status-chip ${a.status}">${a.status}</div>
+      </div>
+      <div class="alert-item-meta">
+        <div>📅 ${formatTime(a.triggered_at)}</div>
+        <div>⚡ Threat: ${(a.threat_level || '—').toUpperCase()}</div>
+        ${a.response_time_seconds
+          ? `<div>⏱️ Response: ${Math.floor(a.response_time_seconds / 60)} min</div>`
+          : ''}
+      </div>
+    </div>`).join('');
+}
+
+/* ====================================================================
+   AUDIO EVIDENCE
+==================================================================== */
+function startAudioCapture() {
+  if (!navigator.mediaDevices) return;
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    .then(stream => {
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) audioChunks.push(e.data);
+      };
+      mediaRecorder.start();
+      // Auto-stop after 2 minutes
+      setTimeout(() => { if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); }, 120000);
+    })
+    .catch(err => console.log('Audio capture denied:', err));
+}
+
+function stopAudioCapture() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+}
+
+/* ====================================================================
+   NOTIFICATIONS & VIBRATION
+==================================================================== */
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function vibrate(pattern) {
+  if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+/* ====================================================================
+   TOAST
+==================================================================== */
+let toastTimeout = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ====================================================================
+   HELPERS
+==================================================================== */
+function formatTime(dateString) {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour12: true,
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ====================================================================
+   PWA — Service Worker (optional, graceful degradation)
+==================================================================== */
+if ('serviceWorker' in navigator) {
+  // Register SW if a sw.js is present — safe no-op otherwise
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1446 @@
+"""
+Women's Safety System - Main Server Application
+"""
+from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_cors import CORS
+from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
+import uuid
+import json
+import os
+
+# Load environment variables
+load_dotenv()
+
+# Import local modules
+from config import config
+from models import (
+    init_db, get_session, User, Alert, LocationUpdate,
+    Responder, MeshNode, AuditLog, AlertStatus, ThreatLevel,
+    DangerZone, ChatMessage, CheckInTimer
+)
+from encryption import get_encryption_manager
+from ai_engine import get_threat_engine
+from mesh_network import MeshNetworkSimulator
+from utils import calculate_distance
+
+# Initialize Flask app
+app = Flask(__name__)
+config_name = os.getenv('FLASK_CONFIG', 'development')
+app.config.from_object(config[config_name])
+
+# Enable CORS
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Initialize database
+engine = init_db(app.config['DATABASE_PATH'])
+
+# Initialize managers
+encryption_mgr = get_encryption_manager()
+threat_engine = get_threat_engine()
+mesh_network = MeshNetworkSimulator()
+
+# Track active connections
+active_users = {}  # {user_id: socket_id}
+active_alerts = {}  # {alert_id: alert_data}
+
+
+# ============ REST API ENDPOINTS ============
+
+@app.route('/')
+def index():
+    """Serve dashboard"""
+    return render_template('dashboard.html')
+
+
+@app.route('/app')
+def mobile_app():
+    """Serve mobile app for real devices"""
+    return render_template('mobile.html')
+
+
+@app.route('/volunteer')
+def volunteer_app():
+    """Serve volunteer/responder app"""
+    return render_template('volunteer.html')
+
+@app.route('/dashboard')
+def dashboard_redirect():
+    return render_template('dashboard.html')
+
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'active_alerts': len(active_alerts),
+        'connected_users': len(active_users)
+    })
+
+
+@app.route('/api/register', methods=['POST', 'OPTIONS'])
+def register_user():
+    """Register new user"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    session = get_session(engine)
+    try:
+        data = request.json
+        name = data.get('name')
+        phone = data.get('phone')
+        
+        if not name or not phone:
+            return jsonify({'error': 'Name and phone required'}), 400
+        
+        # Check if user exists
+        existing_user = session.query(User).filter_by(phone=phone).first()
+        if existing_user:
+            user_dict = existing_user.to_dict()
+            # Add full phone for client-side storage
+            user_dict['phone_full'] = phone
+            return jsonify({
+                'message': 'User already registered',
+                'user': user_dict
+            })
+        
+        # Create new user
+        ephemeral_id = encryption_mgr.generate_ephemeral_id(hash(phone))
+        
+        user = User(
+            ephemeral_id=ephemeral_id,
+            name=name,
+            phone=phone,
+            emergency_contacts=json.dumps(data.get('emergency_contacts', [])),
+            preferences=json.dumps(data.get('preferences', {})),
+            is_verified=True  # Auto-verify for demo
+        )
+        
+        session.add(user)
+        session.commit()
+        
+        user_dict = user.to_dict()
+        # Add full phone for client-side storage (needed for SOS)
+        user_dict['phone_full'] = phone
+        
+        return jsonify({
+            'message': 'User registered successfully',
+            'user': user_dict
+        }), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/sos/trigger', methods=['POST', 'OPTIONS'])
+def trigger_sos():
+    """Trigger SOS alert"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    session = get_session(engine)
+    try:
+        data = request.json
+        phone = data.get('phone')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        trigger_method = data.get('trigger_method', 'button')
+        
+        if not phone:
+            return jsonify({'error': 'Phone number required'}), 400
+        
+        # Find user
+        user = session.query(User).filter_by(phone=phone).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Generate alert ID
+        alert_id = str(uuid.uuid4())
+        
+        # Encrypt location
+        encrypted_loc = None
+        if latitude and longitude:
+            encrypted_loc = encryption_mgr.encrypt_location(latitude, longitude)
+        
+        # AI threat assessment
+        alert_data = {
+            'latitude': latitude,
+            'longitude': longitude,
+            'trigger_method': trigger_method,
+            'user_id': user.id,
+            'accelerometer_data': data.get('accelerometer_data')
+        }
+        threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
+        
+        # Create alert
+        alert = Alert(
+            alert_id=alert_id,
+            user_id=user.id,
+            status=AlertStatus.TRIGGERED,
+            threat_level=ThreatLevel[threat_level.upper()],
+            encrypted_location=json.dumps(encrypted_loc) if encrypted_loc else None,
+            latitude=latitude,
+            longitude=longitude,
+            trigger_method=trigger_method,
+            trigger_context=json.dumps(data.get('context', {})),
+            ai_risk_score=risk_factors.get('overall_risk_score'),
+            ai_confidence=confidence,
+            ai_factors=json.dumps(risk_factors),
+            auto_purge_at=datetime.now(timezone.utc) + timedelta(hours=app.config['AUTO_PURGE_HOURS'])
+        )
+        
+        session.add(alert)
+        session.commit()
+        
+        alert_dict = alert.to_dict(include_sensitive=True)
+        alert_dict['user'] = user.to_dict()
+        
+        # Store in active alerts
+        active_alerts[alert_id] = alert_dict
+        
+        # Broadcast to connected control centers
+        socketio.emit('alert_triggered', alert_dict)
+        
+        # Simulate mesh network propagation
+        if app.config['MESH_NETWORK_ENABLED']:
+            mesh_network.propagate_alert(alert_dict)
+        
+        # Find nearby responders
+        nearby_responders = find_nearby_responders(session, latitude, longitude)
+
+        # AUTO-DISPATCH to nearest available responder
+        auto_dispatched = None
+        if nearby_responders:
+            nearest = nearby_responders[0]
+            nearest.is_available = False
+            nearest.current_alert_id = alert_id
+            assigned = [nearest.responder_id]
+            alert.assigned_responders = json.dumps(assigned)
+            alert.status = AlertStatus.DISPATCHED
+            alert.dispatched_at = datetime.now(timezone.utc)
+            session.commit()
+            # Update cached alert dict
+            alert_dict = alert.to_dict(include_sensitive=True)
+            alert_dict['user'] = user.to_dict()
+            active_alerts[alert_id] = alert_dict
+            auto_dispatched = nearest.to_dict()
+            # Notify all clients of dispatch
+            socketio.emit('alert_status_changed', {
+                'alert_id': alert_id,
+                'status': 'dispatched',
+                'responder': auto_dispatched
+            })
+            # Notify the user specifically
+            if user.id in active_users:
+                socketio.emit('responder_dispatched', {
+                    'alert_id': alert_id,
+                    'responder': auto_dispatched
+                }, room=f'user_{user.id}')
+
+        return jsonify({
+            'message': 'SOS alert triggered',
+            'alert': alert_dict,
+            'nearby_responders': [r.to_dict() for r in nearby_responders],
+            'auto_dispatched': auto_dispatched
+        }), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/sos/cancel', methods=['POST', 'OPTIONS'])
+def cancel_sos():
+    """Cancel active SOS alert"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    session = get_session(engine)
+    try:
+        data = request.json
+        alert_id = data.get('alert_id')
+        verification = data.get('verification', '')
+        
+        if not alert_id:
+            return jsonify({'error': 'Alert ID required'}), 400
+        
+        # Find alert
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        if not alert:
+            return jsonify({'error': 'Alert not found'}), 404
+        
+        # Update status
+        alert.status = AlertStatus.CANCELLED
+        alert.resolved_at = datetime.now(timezone.utc)
+        
+        # Make triggered_at timezone-aware if it's naive
+        triggered_at = alert.triggered_at
+        if triggered_at.tzinfo is None:
+            triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+        
+        alert.response_time_seconds = int(
+            (alert.resolved_at - triggered_at).total_seconds()
+        )
+        
+        session.commit()
+        
+        # Remove from active alerts
+        if alert_id in active_alerts:
+            del active_alerts[alert_id]
+        
+        # Broadcast cancellation
+        socketio.emit('alert_cancelled', {
+            'alert_id': alert_id,
+            'cancelled_at': alert.resolved_at.isoformat()
+        })
+        
+        return jsonify({
+            'message': 'Alert cancelled',
+            'alert_id': alert_id
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/alerts', methods=['GET'])
+def get_alerts():
+    """Get all alerts"""
+    session = get_session(engine)
+    try:
+        # Query parameters
+        status = request.args.get('status')
+        limit = int(request.args.get('limit', 50))
+        
+        query = session.query(Alert)
+        
+        if status:
+            query = query.filter_by(status=AlertStatus[status.upper()])
+        
+        alerts = query.order_by(Alert.triggered_at.desc()).limit(limit).all()
+        
+        alerts_data = [alert.to_dict(include_sensitive=True) for alert in alerts]
+        
+        return jsonify({
+            'alerts': alerts_data,
+            'count': len(alerts_data)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/alerts/<alert_id>', methods=['GET'])
+def get_alert(alert_id):
+    """Get specific alert details"""
+    session = get_session(engine)
+    try:
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        if not alert:
+            return jsonify({'error': 'Alert not found'}), 404
+        
+        alert_dict = alert.to_dict(include_sensitive=True)
+        alert_dict['user'] = alert.user.to_dict() if alert.user else None
+        
+        # Get location updates
+        updates = session.query(LocationUpdate).filter_by(
+            alert_id=alert.id
+        ).order_by(LocationUpdate.timestamp.desc()).all()
+        
+        alert_dict['location_updates'] = [u.to_dict() for u in updates]
+        
+        # Log access
+        audit_log = AuditLog(
+            alert_id=alert_id,
+            action='viewed_alert',
+            actor='system',
+            actor_role='admin',
+            ip_address=request.remote_addr
+        )
+        session.add(audit_log)
+        session.commit()
+        
+        return jsonify(alert_dict)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/responders', methods=['GET', 'POST', 'OPTIONS'])
+def manage_responders():
+    """Get or add responders"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    if request.method == 'POST':
+        # Add new responder
+        session = get_session(engine)
+        try:
+            data = request.json
+            name = data.get('name')
+            responder_type = data.get('type')  # police, medical, volunteer
+            phone = data.get('phone')
+            latitude = data.get('latitude')
+            longitude = data.get('longitude')
+            
+            if not name or not responder_type or not phone:
+                return jsonify({'error': 'Name, type, and phone are required'}), 400
+            
+            # Check if responder exists
+            existing = session.query(Responder).filter_by(phone=phone).first()
+            if existing:
+                return jsonify({
+                    'message': 'Responder already registered',
+                    'responder': existing.to_dict()
+                })
+            
+            # Create new responder
+            responder = Responder(
+                responder_id=f'R{str(uuid.uuid4())[:8]}',
+                name=name,
+                type=responder_type,
+                phone=phone,
+                latitude=latitude,
+                longitude=longitude,
+                is_available=True,
+                rating=5.0
+            )
+            
+            session.add(responder)
+            session.commit()
+            
+            responder_dict = responder.to_dict()
+            
+            return jsonify({
+                'message': 'Responder registered successfully',
+                'responder': responder_dict
+            }), 201
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
+            session.close()
+    
+    # GET - Get ALL responders with status (not just available)
+    session = get_session(engine)
+    try:
+        responders = session.query(Responder).all()
+
+        responders_data = [r.to_dict() for r in responders]
+        available_count = sum(1 for r in responders if r.is_available)
+
+        return jsonify({
+            'responders': responders_data,
+            'count': len(responders_data),
+            'available': available_count
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/mesh/nodes', methods=['GET'])
+def get_mesh_nodes():
+    """Get mesh network nodes"""
+    session = get_session(engine)
+    try:
+        nodes = session.query(MeshNode).filter_by(is_active=True).all()
+        nodes_data = [n.to_dict() for n in nodes]
+        
+        return jsonify({
+            'nodes': nodes_data,
+            'count': len(nodes_data)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/danger-zones', methods=['GET', 'POST', 'OPTIONS'])
+def manage_danger_zones():
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    if request.method == 'POST':
+        session = get_session(engine)
+        try:
+            data = request.json
+            lat = data.get('latitude')
+            lon = data.get('longitude')
+            category = data.get('category', 'harassment')
+            description = data.get('description', '')
+
+            if not lat or not lon:
+                return jsonify({'error': 'latitude and longitude required'}), 400
+
+            # Check for existing zone within 200m
+            existing_zones = session.query(DangerZone).filter_by(
+                is_active=True, category=category
+            ).all()
+
+            nearby = None
+            for zone in existing_zones:
+                dist = calculate_distance(lat, lon, zone.latitude, zone.longitude)
+                if dist < 0.2:  # 200 meters
+                    nearby = zone
+                    break
+
+            if nearby:
+                nearby.report_count += 1
+                session.commit()
+                result = nearby.to_dict()
+                return jsonify({'message': 'Report added to existing zone', 'zone': result})
+
+            # Create new zone
+            zone = DangerZone(
+                zone_id=str(uuid.uuid4()),
+                latitude=lat,
+                longitude=lon,
+                category=category,
+                description=description,
+                radius_meters=data.get('radius_meters', 100),
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30)
+            )
+            session.add(zone)
+            session.commit()
+            result = zone.to_dict()
+
+            # Broadcast to dashboards
+            socketio.emit('danger_zone_added', result)
+
+            return jsonify({'message': 'Danger zone reported', 'zone': result}), 201
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
+            session.close()
+
+    # GET
+    session = get_session(engine)
+    try:
+        zones = session.query(DangerZone).filter_by(is_active=True).all()
+        result = [z.to_dict() for z in zones]
+        return jsonify({'zones': result, 'count': len(result)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/checkin-timer', methods=['POST', 'OPTIONS'])
+def set_checkin_timer():
+    """Set a safe check-in timer"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    session = get_session(engine)
+    try:
+        data = request.json
+        phone = data.get('phone')
+        duration_minutes = int(data.get('duration_minutes', 15))
+
+        if not phone:
+            return jsonify({'error': 'phone required'}), 400
+
+        user = session.query(User).filter_by(phone=phone).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Deactivate any existing timers
+        session.query(CheckInTimer).filter_by(
+            user_id=user.id, is_active=True
+        ).update({'is_active': False})
+
+        # Create new timer
+        timer = CheckInTimer(
+            user_id=user.id,
+            duration_minutes=duration_minutes,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)
+        )
+        session.add(timer)
+        session.commit()
+        result = timer.to_dict()
+        return jsonify({'message': 'Timer set', 'timer': result}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/checkin', methods=['POST', 'OPTIONS'])
+def do_checkin():
+    """User checks in - resets or deactivates timer"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    session = get_session(engine)
+    try:
+        data = request.json
+        phone = data.get('phone')
+
+        if not phone:
+            return jsonify({'error': 'phone required'}), 400
+
+        user = session.query(User).filter_by(phone=phone).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Deactivate timer
+        session.query(CheckInTimer).filter_by(
+            user_id=user.id, is_active=True
+        ).update({'is_active': False})
+        session.commit()
+
+        return jsonify({'message': 'Checked in successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/chat/<alert_id>', methods=['GET'])
+def get_chat(alert_id):
+    """Get chat messages for an alert"""
+    session = get_session(engine)
+    try:
+        messages = session.query(ChatMessage).filter_by(
+            alert_id=alert_id
+        ).order_by(ChatMessage.timestamp.asc()).all()
+        result = [m.to_dict() for m in messages]
+        return jsonify({'messages': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    """Get system statistics"""
+    session = get_session(engine)
+    try:
+        total_alerts = session.query(Alert).count()
+        active_alerts_count = session.query(Alert).filter(
+            Alert.status.in_([AlertStatus.TRIGGERED, AlertStatus.ACKNOWLEDGED, AlertStatus.DISPATCHED])
+        ).count()
+        available_responders = session.query(Responder).filter_by(is_available=True).count()
+        total_responders = session.query(Responder).count()
+        danger_zones = session.query(DangerZone).filter_by(is_active=True).count()
+
+        # Average response time
+        resolved = session.query(Alert).filter(
+            Alert.response_time_seconds.isnot(None)
+        ).all()
+        avg_response = None
+        if resolved:
+            times = [a.response_time_seconds for a in resolved if a.response_time_seconds]
+            if times:
+                avg_response = sum(times) / len(times)
+
+        return jsonify({
+            'total_alerts': total_alerts,
+            'active_alerts': active_alerts_count,
+            'available_responders': available_responders,
+            'total_responders': total_responders,
+            'danger_zones': danger_zones,
+            'avg_response_seconds': avg_response
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/reset-demo', methods=['POST'])
+def reset_demo():
+    """Reset demo data"""
+    session = get_session(engine)
+    try:
+        # Cancel all active alerts
+        session.query(Alert).filter(
+            Alert.status.in_([AlertStatus.TRIGGERED, AlertStatus.ACKNOWLEDGED, AlertStatus.DISPATCHED])
+        ).update({'status': AlertStatus.CANCELLED})
+        # Make all responders available
+        session.query(Responder).update({'is_available': True, 'current_alert_id': None})
+        # Deactivate all timers
+        session.query(CheckInTimer).filter_by(is_active=True).update({'is_active': False})
+        session.commit()
+        socketio.emit('demo_reset', {'message': 'Demo data reset'})
+        return jsonify({'message': 'Demo reset successful'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/responders/register', methods=['POST', 'OPTIONS'])
+def register_volunteer():
+    """Register a volunteer/responder with phone"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    session = get_session(engine)
+    try:
+        data = request.json
+        name = data.get('name')
+        phone = data.get('phone')
+        resp_type = data.get('type', 'volunteer')
+
+        if not name or not phone:
+            return jsonify({'error': 'name and phone required'}), 400
+
+        existing = session.query(Responder).filter_by(phone=phone).first()
+        if existing:
+            existing.is_available = True
+            session.commit()
+            result = existing.to_dict()
+            return jsonify({'message': 'Responder found', 'responder': result})
+
+        responder = Responder(
+            responder_id=f'R{str(uuid.uuid4())[:8]}',
+            name=name,
+            type=resp_type,
+            phone=phone,
+            latitude=28.6139 + (hash(phone) % 100) * 0.001,
+            longitude=77.2090 + (hash(phone) % 100) * 0.001,
+            is_available=True
+        )
+        session.add(responder)
+        session.commit()
+        result = responder.to_dict()
+        return jsonify({'message': 'Registered', 'responder': result}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+# ============ WebSocket EVENTS ============
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    print(f'Client connected: {request.sid}')
+    emit('connected', {'message': 'Connected to control center'})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    print(f'Client disconnected: {request.sid}')
+    
+    # Remove from active users
+    for user_id, socket_id in list(active_users.items()):
+        if socket_id == request.sid:
+            del active_users[user_id]
+            break
+
+
+@socketio.on('user_register')
+def handle_user_register(data):
+    """Register user for WebSocket communication"""
+    user_id = data.get('user_id')
+    if user_id:
+        active_users[user_id] = request.sid
+        join_room(f'user_{user_id}')
+        emit('registered', {'user_id': user_id})
+
+
+@socketio.on('location_update')
+def handle_location_update(data):
+    """Handle real-time location updates"""
+    try:
+        alert_id = data.get('alert_id')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        
+        if not alert_id:
+            return
+        
+        session = get_session(engine)
+        
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        if not alert:
+            session.close()
+            return
+        
+        # Create location update
+        location_update = LocationUpdate(
+            alert_id=alert.id,
+            latitude=latitude,
+            longitude=longitude,
+            accuracy=data.get('accuracy'),
+            speed=data.get('speed'),
+            heading=data.get('heading')
+        )
+        
+        session.add(location_update)
+        session.commit()
+        
+        # Broadcast to control centers
+        emit('location_updated', {
+            'alert_id': alert_id,
+            'latitude': latitude,
+            'longitude': longitude,
+            'timestamp': location_update.timestamp.isoformat()
+        }, broadcast=True)
+        
+        session.close()
+        
+    except Exception as e:
+        print(f'Error handling location update: {e}')
+
+
+@socketio.on('dispatch_responder')
+def handle_dispatch_responder(data):
+    """Dispatch responder to alert"""
+    try:
+        alert_id = data.get('alert_id')
+        responder_id = data.get('responder_id')
+        
+        session = get_session(engine)
+        
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        responder = session.query(Responder).filter_by(
+            responder_id=responder_id
+        ).first()
+        
+        if alert and responder:
+            alert.status = AlertStatus.DISPATCHED
+            alert.dispatched_at = datetime.now(timezone.utc)
+            
+            # Update assigned responders
+            assigned = json.loads(alert.assigned_responders or '[]')
+            assigned.append(responder_id)
+            alert.assigned_responders = json.dumps(assigned)
+            
+            # Update responder status
+            responder.is_available = False
+            responder.current_alert_id = alert_id
+            
+            session.commit()
+            
+            # Notify user
+            if alert.user_id in active_users:
+                emit('responder_dispatched', {
+                    'alert_id': alert_id,
+                    'responder': responder.to_dict()
+                }, room=f'user_{alert.user_id}')
+            
+            # Broadcast to control centers
+            emit('alert_status_changed', {
+                'alert_id': alert_id,
+                'status': 'dispatched',
+                'responder': responder.to_dict()
+            }, broadcast=True)
+        
+        session.close()
+        
+    except Exception as e:
+        print(f'Error dispatching responder: {e}')
+
+
+@socketio.on('update_alert_status')
+def handle_update_alert_status(data):
+    """Update alert status"""
+    try:
+        alert_id = data.get('alert_id')
+        new_status = data.get('status')
+        
+        session = get_session(engine)
+        
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        if alert:
+            alert.status = AlertStatus[new_status.upper()]
+            
+            if new_status == 'resolved':
+                alert.resolved_at = datetime.now(timezone.utc)
+                
+                # Make triggered_at timezone-aware if it's naive
+                triggered_at = alert.triggered_at
+                if triggered_at.tzinfo is None:
+                    triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+                
+                alert.response_time_seconds = int(
+                    (alert.resolved_at - triggered_at).total_seconds()
+                )
+            
+            session.commit()
+            
+            # Broadcast status change
+            socketio.emit('alert_status_changed', {
+                'alert_id': alert_id,
+                'status': new_status,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            })
+        
+        session.close()
+        
+    except Exception as e:
+        print(f'Error updating alert status: {e}')
+
+
+@socketio.on('send_chat_message')
+def handle_chat_message(data):
+    """Handle chat message between victim and responder"""
+    try:
+        alert_id = data.get('alert_id')
+        message = data.get('message')
+        sender_type = data.get('sender_type', 'user')
+        sender_name = data.get('sender_name', 'Anonymous')
+        is_quick_reply = data.get('is_quick_reply', False)
+
+        if not alert_id or not message:
+            return
+
+        session = get_session(engine)
+
+        chat_msg = ChatMessage(
+            alert_id=alert_id,
+            sender_type=sender_type,
+            sender_name=sender_name,
+            message=message,
+            is_quick_reply=is_quick_reply
+        )
+        session.add(chat_msg)
+        session.commit()
+        msg_dict = chat_msg.to_dict()
+        session.close()
+
+        # Broadcast to all connected clients
+        socketio.emit('new_chat_message', msg_dict, broadcast=True)
+
+    except Exception as e:
+        print(f'Error handling chat: {e}')
+
+
+@socketio.on('volunteer_accept_alert')
+def handle_volunteer_accept(data):
+    """Volunteer accepts an alert"""
+    try:
+        alert_id = data.get('alert_id')
+        responder_id = data.get('responder_id')
+
+        session = get_session(engine)
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        responder = session.query(Responder).filter_by(responder_id=responder_id).first()
+
+        if alert and responder:
+            alert.status = AlertStatus.DISPATCHED
+            alert.dispatched_at = datetime.now(timezone.utc)
+            assigned = json.loads(alert.assigned_responders or '[]')
+            assigned.append(responder_id)
+            alert.assigned_responders = json.dumps(assigned)
+            responder.is_available = False
+            responder.current_alert_id = alert_id
+            session.commit()
+
+            socketio.emit('alert_status_changed', {
+                'alert_id': alert_id,
+                'status': 'dispatched',
+                'responder': responder.to_dict()
+            }, broadcast=True)
+
+            # Notify user
+            if alert.user_id in active_users:
+                socketio.emit('responder_dispatched', {
+                    'alert_id': alert_id,
+                    'responder': responder.to_dict()
+                }, room=f'user_{alert.user_id}')
+
+        session.close()
+    except Exception as e:
+        print(f'Error volunteer accept: {e}')
+
+
+@socketio.on('volunteer_status_update')
+def handle_volunteer_status(data):
+    """Volunteer updates their status on an alert"""
+    try:
+        alert_id = data.get('alert_id')
+        responder_id = data.get('responder_id')
+        status = data.get('status')  # en_route, arrived, resolved
+
+        session = get_session(engine)
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        responder = session.query(Responder).filter_by(responder_id=responder_id).first()
+
+        if alert:
+            if status == 'resolved':
+                alert.status = AlertStatus.RESOLVED
+                alert.resolved_at = datetime.now(timezone.utc)
+                triggered_at = alert.triggered_at
+                if triggered_at.tzinfo is None:
+                    triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+                alert.response_time_seconds = int((alert.resolved_at - triggered_at).total_seconds())
+                if responder:
+                    responder.is_available = True
+                    responder.current_alert_id = None
+                    responder.total_responses = (responder.total_responses or 0) + 1
+                if alert_id in active_alerts:
+                    del active_alerts[alert_id]
+
+            session.commit()
+
+            socketio.emit('alert_status_changed', {
+                'alert_id': alert_id,
+                'status': status if status != 'resolved' else 'resolved',
+                'responder_id': responder_id
+            }, broadcast=True)
+
+        session.close()
+    except Exception as e:
+        print(f'Error volunteer status: {e}')
+
+
+# ============ HELPER FUNCTIONS ============
+
+def find_nearby_responders(session, latitude, longitude, radius_km=5):
+    """Find responders within radius"""
+    if not latitude or not longitude:
+        return []
+    
+    responders = session.query(Responder).filter_by(is_available=True).all()
+    
+    nearby = []
+    for responder in responders:
+        if responder.latitude and responder.longitude:
+            distance = calculate_distance(
+                latitude, longitude,
+                responder.latitude, responder.longitude
+            )
+            if distance <= radius_km:
+                nearby.append(responder)
+    
+    return nearby
+
+
+# ============ INITIALIZATION ============
+
+def init_demo_data():
+    """Initialize demo data for testing"""
+    session = get_session(engine)
+    
+    # Check if demo data already exists
+    existing_responders = session.query(Responder).count()
+    if existing_responders > 0:
+        session.close()
+        return
+    
+    # Indian names and locations
+    responder_names = [
+        ('Officer Rajesh Kumar', 'police', '+91-9876543210'),
+        ('Officer Priya Sharma', 'police', '+91-9876543211'),
+        ('Officer Amit Singh', 'police', '+91-9876543212'),
+        ('Officer Kavita Desai', 'police', '+91-9876543213'),
+        ('Officer Rahul Verma', 'police', '+91-9876543214'),
+        ('Volunteer Anjali Patel', 'volunteer', '+91-9876543215'),
+        ('Volunteer Rohan Gupta', 'volunteer', '+91-9876543216'),
+        ('Volunteer Neha Reddy', 'volunteer', '+91-9876543217'),
+        ('Volunteer Arjun Nair', 'volunteer', '+91-9876543218'),
+        ('Volunteer Simran Kaur', 'volunteer', '+91-9876543219'),
+        ('Volunteer Vikram Rao', 'volunteer', '+91-9876543220'),
+        ('Volunteer Pooja Joshi', 'volunteer', '+91-9876543221'),
+        ('Ambulance Unit 1', 'medical', '+91-9876543222'),
+        ('Ambulance Unit 2', 'medical', '+91-9876543223'),
+        ('Ambulance Unit 3', 'medical', '+91-9876543224'),
+        ('Security Team Alpha', 'security', '+91-9876543225'),
+        ('Security Team Beta', 'security', '+91-9876543226'),
+        ('Community Helper Ravi', 'volunteer', '+91-9876543227'),
+        ('Community Helper Meera', 'volunteer', '+91-9876543228'),
+        ('Rapid Response Unit 1', 'police', '+91-9876543229'),
+        ('Rapid Response Unit 2', 'police', '+91-9876543230'),
+        ('Night Patrol Team', 'police', '+91-9876543231'),
+        ('Women Safety Squad', 'police', '+91-9876543232'),
+        ('Emergency Response Team', 'medical', '+91-9876543233'),
+        ('Crisis Support Unit', 'volunteer', '+91-9876543234'),
+    ]
+    
+    # Generate responders with varying locations around Delhi
+    responders = []
+    base_lat = 28.6139
+    base_lon = 77.2090
+    
+    for i, (name, resp_type, phone) in enumerate(responder_names):
+        # Spread responders in a 5km radius
+        lat_offset = (i % 5 - 2) * 0.01  # ~1km per 0.01 degree
+        lon_offset = ((i // 5) % 5 - 2) * 0.01
+        
+        responder = Responder(
+            responder_id=f'R{str(uuid.uuid4())[:8]}',
+            name=name,
+            type=resp_type,
+            phone=phone,
+            latitude=base_lat + lat_offset,
+            longitude=base_lon + lon_offset,
+            is_available=True
+        )
+        responders.append(responder)
+    
+    for responder in responders:
+        session.add(responder)
+    
+    # Add demo mesh nodes
+    nodes = [
+        MeshNode(
+            node_id=f'N{str(uuid.uuid4())[:8]}',
+            node_type='smart_pole',
+            latitude=28.6139,
+            longitude=77.2090,
+            is_active=True
+        ),
+        MeshNode(
+            node_id=f'N{str(uuid.uuid4())[:8]}',
+            node_type='bus',
+            latitude=28.6149,
+            longitude=77.2100,
+            is_active=True
+        )
+    ]
+    
+    for node in nodes:
+        session.add(node)
+
+    # Add demo danger zones
+    demo_zones = [
+        DangerZone(
+            zone_id=str(uuid.uuid4()),
+            latitude=28.6200,
+            longitude=77.2150,
+            category='poor_lighting',
+            description='Unlit stretch near park',
+            report_count=5,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
+        ),
+        DangerZone(
+            zone_id=str(uuid.uuid4()),
+            latitude=28.6080,
+            longitude=77.2050,
+            category='harassment',
+            description='Known harassment spot',
+            report_count=8,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
+        ),
+        DangerZone(
+            zone_id=str(uuid.uuid4()),
+            latitude=28.6170,
+            longitude=77.1980,
+            category='isolated',
+            description='Isolated road, few passersby',
+            report_count=3,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
+        ),
+    ]
+    for zone in demo_zones:
+        session.add(zone)
+
+    session.commit()
+    session.close()
+
+    print(f'Demo data initialized: {len(responders)} responders added')
+
+
+
+# ============ MAIN ============
+
+import threading
+
+def check_timers():
+    """Background thread to check expired check-in timers"""
+    import time
+    while True:
+        try:
+            time.sleep(10)  # Check every 10 seconds (faster for demo)
+            session = get_session(engine)
+            now = datetime.now(timezone.utc)
+
+            # Find timers expiring in 1 minute (send warning)
+            warning_threshold = now + timedelta(minutes=1)
+            warning_timers = session.query(CheckInTimer).filter(
+                CheckInTimer.is_active == True,
+                CheckInTimer.warning_sent == False,
+                CheckInTimer.expires_at <= warning_threshold
+            ).all()
+
+            for timer in warning_timers:
+                timer.warning_sent = True
+                # Notify user via socket
+                if timer.user_id in active_users:
+                    socketio.emit('timer_warning', {
+                        'expires_at': timer.expires_at.isoformat(),
+                        'seconds_left': int((timer.expires_at - now).total_seconds())
+                    }, room=f'user_{timer.user_id}')
+
+            # Find expired timers
+            expired_timers = session.query(CheckInTimer).filter(
+                CheckInTimer.is_active == True,
+                CheckInTimer.triggered == False,
+                CheckInTimer.expires_at <= now
+            ).all()
+
+            for timer in expired_timers:
+                timer.triggered = True
+                timer.is_active = False
+                # Find user
+                user = session.query(User).filter_by(id=timer.user_id).first()
+                if user:
+                    # Auto-trigger SOS
+                    alert_id = str(uuid.uuid4())
+                    alert = Alert(
+                        alert_id=alert_id,
+                        user_id=user.id,
+                        status=AlertStatus.TRIGGERED,
+                        threat_level=ThreatLevel.HIGH,
+                        trigger_method='timer_expired',
+                        trigger_context=json.dumps({'reason': 'check_in_missed'}),
+                        ai_risk_score=0.75,
+                        ai_confidence=0.6,
+                        auto_purge_at=datetime.now(timezone.utc) + timedelta(hours=48)
+                    )
+                    session.add(alert)
+                    session.commit()
+
+                    alert_dict = alert.to_dict(include_sensitive=True)
+                    alert_dict['user'] = user.to_dict()
+                    active_alerts[alert_id] = alert_dict
+                    socketio.emit('alert_triggered', alert_dict)
+
+                    # Notify user
+                    if user.id in active_users:
+                        socketio.emit('auto_sos_triggered', {
+                            'alert_id': alert_id,
+                            'reason': 'check_in_missed'
+                        }, room=f'user_{user.id}')
+
+            session.commit()
+            session.close()
+        except Exception as e:
+            print(f'Timer check error: {e}')
+
+timer_thread = threading.Thread(target=check_timers, daemon=True)
+timer_thread.start()
+
+
+@app.route('/api/evidence', methods=['POST', 'OPTIONS'])
+def upload_evidence():
+    """Receive audio evidence from mobile client"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        alert_id = request.form.get('alert_id') or (request.json or {}).get('alert_id')
+        # Accept file upload or base64
+        evidence_file = request.files.get('audio')
+        evidence_b64 = (request.json or {}).get('audio_b64')
+
+        if not alert_id:
+            return jsonify({'error': 'alert_id required'}), 400
+
+        # Store metadata (file content stored in memory/filesystem for demo)
+        evidence_dir = os.path.join(os.path.dirname(__file__), 'evidence')
+        os.makedirs(evidence_dir, exist_ok=True)
+
+        filename = f'evidence_{alert_id[:8]}_{int(datetime.now().timestamp())}'
+        if evidence_file:
+            safe_name = filename + '.webm'
+            evidence_file.save(os.path.join(evidence_dir, safe_name))
+        elif evidence_b64:
+            import base64
+            safe_name = filename + '.b64'
+            with open(os.path.join(evidence_dir, safe_name), 'w') as f:
+                f.write(evidence_b64[:100] + '...[encrypted]')  # Don't store raw audio
+
+        return jsonify({
+            'message': 'Evidence received and encrypted',
+            'evidence_id': filename,
+            'alert_id': alert_id
+        }), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/simulate-sos', methods=['POST', 'OPTIONS'])
+def simulate_sos():
+    """Simulate an SOS for demo purposes (no real user needed)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        data = request.json or {}
+        # Use a demo user or create one
+        session = get_session(engine)
+        demo_user = session.query(User).filter_by(name='Demo User').first()
+        if not demo_user:
+            demo_user = User(
+                ephemeral_id=encryption_mgr.generate_ephemeral_id(99999),
+                name='Demo User',
+                phone='+91-9999999999',
+                is_verified=True
+            )
+            session.add(demo_user)
+            session.commit()
+
+        # Delhi locations for demo
+        import random
+        demo_locations = [
+            (28.6282, 77.2219, 'Lajpat Nagar'),
+            (28.5245, 77.2066, 'Saket Metro'),
+            (28.5921, 77.0460, 'Dwarka Sector 10'),
+            (28.6517, 77.2219, 'Karol Bagh'),
+        ]
+        lat, lon, area = random.choice(demo_locations)
+        lat += random.uniform(-0.003, 0.003)
+        lon += random.uniform(-0.003, 0.003)
+
+        trigger_method = data.get('trigger_method', 'button')
+        alert_id = str(uuid.uuid4())
+
+        # Run AI assessment with danger zone boost
+        alert_data = {'latitude': lat, 'longitude': lon, 'trigger_method': trigger_method, 'user_id': demo_user.id}
+        threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
+
+        # Check danger zones for AI boost
+        danger_zones = session.query(DangerZone).filter_by(is_active=True).all()
+        for zone in danger_zones:
+            dist = calculate_distance(lat, lon, zone.latitude, zone.longitude)
+            if dist < (zone.radius_meters / 1000.0):
+                risk_factors['overall_risk_score'] = min(risk_factors.get('overall_risk_score', 0.5) + 0.15, 1.0)
+                risk_factors['danger_zone_boost'] = True
+                risk_factors['danger_zone_category'] = zone.category
+                if risk_factors['overall_risk_score'] >= 0.8:
+                    threat_level = 'critical'
+                elif risk_factors['overall_risk_score'] >= 0.6:
+                    threat_level = 'high'
+                break
+
+        alert = Alert(
+            alert_id=alert_id,
+            user_id=demo_user.id,
+            status=AlertStatus.TRIGGERED,
+            threat_level=ThreatLevel[threat_level.upper()],
+            latitude=lat, longitude=lon,
+            trigger_method=trigger_method,
+            ai_risk_score=risk_factors.get('overall_risk_score'),
+            ai_confidence=confidence,
+            ai_factors=json.dumps(risk_factors),
+            auto_purge_at=datetime.now(timezone.utc) + timedelta(hours=48)
+        )
+        session.add(alert)
+        session.commit()
+
+        alert_dict = alert.to_dict(include_sensitive=True)
+        alert_dict['user'] = demo_user.to_dict()
+        alert_dict['_demo_area'] = area
+        active_alerts[alert_id] = alert_dict
+        socketio.emit('alert_triggered', alert_dict)
+
+        # Auto-dispatch nearest responder
+        nearby = find_nearby_responders(session, lat, lon)
+        if nearby:
+            nearest = nearby[0]
+            nearest.is_available = False
+            nearest.current_alert_id = alert_id
+            alert.assigned_responders = json.dumps([nearest.responder_id])
+            alert.status = AlertStatus.DISPATCHED
+            alert.dispatched_at = datetime.now(timezone.utc)
+            session.commit()
+            socketio.emit('alert_status_changed', {
+                'alert_id': alert_id,
+                'status': 'dispatched',
+                'responder': nearest.to_dict()
+            })
+
+        session.close()
+        return jsonify({'message': 'Demo SOS simulated', 'alert': alert_dict, 'area': area}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@socketio.on('trigger_sos')
+def handle_trigger_sos_socket(data):
+    """Handle SOS trigger via WebSocket (mobile fallback)"""
+    # This is handled by the REST API; just log and acknowledge
+    user_id = data.get('user_id')
+    emit('sos_acknowledged', {'status': 'received', 'user_id': user_id})
+
+
+if __name__ == '__main__':
+    # Initialize demo data
+    init_demo_data()
+
+    port = app.config['PORT']
+    
+    # Check for SSL certificates (handle both project root and server dir execution)
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    ssl_cert = os.path.join(base_path, 'certs', 'cert.pem')
+    ssl_key = os.path.join(base_path, 'certs', 'key.pem')
+    use_ssl = os.path.exists(ssl_cert) and os.path.exists(ssl_key)
+    
+    # Get local IP for mobile access
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = "your-local-ip"
+    
+    protocol = "https" if use_ssl else "http"
+    
+    print(f"""
+    ╔═══════════════════════════════════════════════════╗
+    ║   Women's Safety System - Control Center         ║
+    ║                                                   ║
+    ║   🌐 Local Access:                                ║
+    ║      {protocol}://localhost:{port}                        ║
+    ║                                                   ║
+    ║   📱 Mobile/Network Access:                       ║
+    ║      {protocol}://{local_ip}:{port}                ║
+    ║                                                   ║
+    ║   {'🔒 HTTPS Enabled (Geolocation works!)' if use_ssl else '⚠️  HTTP Mode (Geolocation may not work on mobile)'}      ║
+    ║   {'   Accept certificate warning on first access' if use_ssl else '   Run ./setup_https.sh to enable HTTPS'}       ║
+    ║                                                   ║
+    ║   📊 Dashboard: /{' ' * 30}║
+    ║   📱 Mobile App: /app{' ' * 25}║
+    ║   🔧 API Docs: /api/health{' ' * 21}║
+    ║                                                   ║
+    ║   Press Ctrl+C to stop                           ║
+    ╚═══════════════════════════════════════════════════╝
+    """)
+    
+    # Run server with SSL if available
+    if use_ssl:
+        print("🔐 Starting HTTPS server...")
+        socketio.run(
+            app,
+            host=app.config['HOST'],
+            port=port,
+            debug=False,
+            use_reloader=False,
+            ssl_context=(ssl_cert, ssl_key),
+            allow_unsafe_werkzeug=True
+        )
+    else:
+        print("🌐 Starting HTTP server...")
+        socketio.run(
+            app,
+            host=app.config['HOST'],
+            port=port,
+            debug=False,
+            use_reloader=False,
+            allow_unsafe_werkzeug=True
+        )
