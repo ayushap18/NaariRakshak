@@ -184,6 +184,46 @@
       font-style: italic;
       color: #aaa;
     }
+    .chat-msg.ai_assistant {
+      background: rgba(66,133,244,0.08);
+      border-left: 3px solid #4285F4;
+      color: #8AB4F8;
+    }
+
+    .ai-gemini-tag {
+      background: rgba(66,133,244,0.2); color: #8AB4F8;
+      font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600;
+    }
+    .ai-rule-tag {
+      background: rgba(255,255,255,0.08); color: #888;
+      font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600;
+    }
+    .ai-reasoning {
+      font-size: 11px; color: #8AB4F8; margin: 3px 0;
+      padding: 4px 8px; background: rgba(66,133,244,0.06);
+      border-radius: 4px; line-height: 1.4;
+    }
+    .btn-ai-summary {
+      background: rgba(66,133,244,0.15) !important;
+      border-color: #4285F4 !important;
+      color: #8AB4F8 !important;
+    }
+    .ai-summary-modal {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ai-summary-content {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px; max-width: 500px; width: 90%;
+      color: var(--text); position: relative;
+    }
+    .ai-summary-content h3 { margin: 0 0 12px 0; color: #8AB4F8; }
+    .ai-summary-content p { line-height: 1.6; margin: 0; }
+    .ai-summary-close {
+      position: absolute; top: 8px; right: 12px; background: none;
+      border: none; color: #888; font-size: 18px; cursor: pointer;
+    }
 
     #conn-dot {
       width: 8px; height: 8px;
@@ -1426,15 +1466,20 @@ function buildAlertCard(a) {
   const unread = chatUnread[a.alert_id] || 0;
   const badge = unread > 0 ? `<span class="chat-badge">${unread}</span>` : '';
   actionBtns += `<button class="btn btn-chat" onclick="event.stopPropagation();openChatPanel('${a.alert_id}')">💬 Chat${badge}</button>`;
+  actionBtns += `<button class="btn btn-ai-summary" onclick="event.stopPropagation();getAISummary('${a.alert_id}')" title="AI Incident Summary">🤖 Summary</button>`;
+
+  const aiSource = a.ai_source === 'gemini' ? '<span class="ai-gemini-tag">🤖 Gemini</span>' : (a.ai_source === 'rule-based' ? '<span class="ai-rule-tag">📊 Rules</span>' : '');
+  const aiReasoning = a.ai_reasoning ? `<div class="ai-reasoning">${escapeHtml(a.ai_reasoning)}</div>` : '';
 
   return `
     <div class="alert-card level-${level}" id="card-${a.alert_id}" onclick="focusAlert('${a.alert_id}')">
       <div class="alert-card-top">
         <span class="alert-level-badge badge-${level}">${level === 'critical' ? '🔴' : level === 'high' ? '🟠' : '🟡'} ${level.toUpperCase()}</span>
-        <span class="alert-id-time">#${shortId} · ${timeAgo}</span>
+        <span class="alert-id-time">#${shortId} · ${timeAgo} ${aiSource}</span>
       </div>
       <div class="alert-location">${location}</div>
       <div class="alert-trigger">Trigger: ${a.trigger_method || 'N/A'}${a.user && a.user.name ? ' · ' + a.user.name : ''}</div>
+      ${aiReasoning}
       ${pct !== null ? `
         <div class="ai-bar-row">
           <span class="ai-label">AI</span>
@@ -1646,8 +1691,9 @@ function closeChatPanel() {
 function appendChatMessage(msg) {
   const container = document.getElementById('chat-messages');
   const isSys = msg.sender_type === 'system';
+  const isAI  = msg.sender_type === 'ai_assistant';
   const isOp  = msg.sender_type === 'operator' || msg.sender_type === 'responder';
-  const cls   = isSys ? 'system' : (isOp ? 'operator' : 'user');
+  const cls   = isSys ? 'system' : (isAI ? 'ai_assistant' : (isOp ? 'operator' : 'user'));
   const div   = document.createElement('div');
   div.className = 'chat-msg ' + cls;
   div.innerHTML = `
@@ -1718,8 +1764,45 @@ function updateModeUI() {
 }
 
 /* ─────────────────────────────────────────────────
-   SOUND
+   AI SUMMARY
 ───────────────────────────────────────────────── */
+async function getAISummary(alertId) {
+  // Show loading
+  const modal = document.createElement('div');
+  modal.className = 'ai-summary-modal';
+  modal.id = 'ai-summary-modal';
+  modal.innerHTML = `
+    <div class="ai-summary-content">
+      <button class="ai-summary-close" onclick="document.getElementById('ai-summary-modal').remove()">✕</button>
+      <h3>🤖 AI Incident Summary</h3>
+      <p id="ai-summary-text">Generating summary with Gemini AI...</p>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  try {
+    const r = await fetch(`/api/ai/summary/${alertId}`);
+    const d = await r.json();
+    document.getElementById('ai-summary-text').textContent = d.summary || d.error || 'No summary available';
+  } catch(e) {
+    document.getElementById('ai-summary-text').textContent = 'Failed to generate summary';
+  }
+}
+
+async function analyseChat(alertId) {
+  try {
+    const r = await fetch(`/api/ai/analyse-chat/${alertId}`, { method: 'POST' });
+    const d = await r.json();
+    if (d.analysis && d.analysis.escalate) {
+      showToast(`⚠️ AI escalated alert: ${d.analysis.reasoning}`, 'danger');
+    } else {
+      showToast('AI: No escalation needed', 'info');
+    }
+  } catch(e) {
+    showToast('AI analysis failed', 'danger');
+  }
+}
 function playAlertSound() {
   try {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1876,10 +1959,29 @@ function formatSeconds(secs) {
 }
 
 function getLocationLabel(a) {
+  if (a.location_name && a.location_name !== 'Unknown') {
+    return a.location_name;
+  }
+  if (a._demo_area) return a._demo_area;
   if (a.latitude && a.longitude) {
+    // Async geocode — update later
+    fetchLocationName(a);
     return `${a.latitude.toFixed(4)}°N, ${a.longitude.toFixed(4)}°E`;
   }
   return 'Location unavailable';
+}
+
+async function fetchLocationName(a) {
+  if (a._geocoding || a.location_name) return;
+  a._geocoding = true;
+  try {
+    const r = await fetch(`/api/ai/geocode?lat=${a.latitude}&lon=${a.longitude}`);
+    const d = await r.json();
+    if (d.location_name) {
+      a.location_name = d.location_name;
+      renderAlerts(); // re-render with the name
+    }
+  } catch(e) { /* silent */ }
 }
 
 function escapeHtml(str) {

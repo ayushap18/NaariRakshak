@@ -24,6 +24,11 @@ from encryption import get_encryption_manager
 from ai_engine import get_threat_engine
 from mesh_network import MeshNetworkSimulator
 from utils import calculate_distance
+from gemini_ai import (
+    assess_threat_with_ai, get_safety_questions,
+    analyse_chat_for_escalation, generate_incident_summary,
+    get_location_name
+)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -193,15 +198,42 @@ def trigger_sos():
         if latitude and longitude:
             encrypted_loc = encryption_mgr.encrypt_location(latitude, longitude)
         
-        # AI threat assessment
+        # AI threat assessment — try Gemini first, fallback to rule-based
+        location_name = get_location_name(latitude, longitude) if latitude and longitude else 'Unknown'
+
+        # Get nearby danger zones for AI context
+        danger_zone_list = []
+        if latitude and longitude:
+            dz_all = session.query(DangerZone).filter_by(is_active=True).all()
+            for z in dz_all:
+                if calculate_distance(latitude, longitude, z.latitude, z.longitude) < 0.5:
+                    danger_zone_list.append({'category': z.category, 'report_count': z.report_count})
+
         alert_data = {
             'latitude': latitude,
             'longitude': longitude,
+            'location_name': location_name,
             'trigger_method': trigger_method,
             'user_id': user.id,
+            'prior_alerts': session.query(Alert).filter_by(user_id=user.id).count(),
+            'trigger_context': data.get('context', {}),
             'accelerometer_data': data.get('accelerometer_data')
         }
-        threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
+
+        # Try Gemini AI assessment
+        ai_result = assess_threat_with_ai(alert_data, danger_zone_list)
+        if ai_result:
+            threat_level = ai_result.get('threat_level', 'high')
+            confidence = ai_result.get('confidence', 0.8)
+            risk_factors = ai_result.get('risk_factors', {})
+            risk_factors['overall_risk_score'] = ai_result.get('risk_score', 0.7)
+            risk_factors['reasoning'] = ai_result.get('reasoning', '')
+            risk_factors['recommended_actions'] = ai_result.get('recommended_actions', [])
+            risk_factors['ai_source'] = 'gemini'
+        else:
+            # Fallback to rule-based engine
+            threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
+            risk_factors['ai_source'] = 'rule-based'
         
         # Create alert
         alert = Alert(
@@ -225,6 +257,11 @@ def trigger_sos():
         
         alert_dict = alert.to_dict(include_sensitive=True)
         alert_dict['user'] = user.to_dict()
+        alert_dict['location_name'] = location_name
+        alert_dict['ai_source'] = risk_factors.get('ai_source', 'unknown')
+        if ai_result:
+            alert_dict['ai_reasoning'] = ai_result.get('reasoning', '')
+            alert_dict['recommended_actions'] = ai_result.get('recommended_actions', [])
         
         # Store in active alerts
         active_alerts[alert_id] = alert_dict
@@ -269,11 +306,13 @@ def trigger_sos():
                 }, room=f'user_{user.id}')
 
         # Auto-send system chat message so dashboard sees context immediately
+        ai_tag = '🤖 Gemini AI' if risk_factors.get('ai_source') == 'gemini' else '📊 Rule Engine'
+        reasoning = risk_factors.get('reasoning', '')
         sys_msg = ChatMessage(
             alert_id=alert_id,
             sender_type='system',
             sender_name='NaariRakshak',
-            message=f'🚨 SOS triggered via {trigger_method} by {user.name or "User"}. Threat level: {threat_level.upper()}. AI confidence: {int(confidence*100)}%.',
+            message=f'🚨 SOS triggered via {trigger_method} by {user.name or "User"} near {location_name}. Threat: {threat_level.upper()} ({ai_tag}, {int(confidence*100)}% confidence). {reasoning}',
             is_quick_reply=False
         )
         session.add(sys_msg)
@@ -292,6 +331,27 @@ def trigger_sos():
             session.add(dispatch_msg)
             session.commit()
             socketio.emit('new_chat_message', dispatch_msg.to_dict())
+
+        # AI safety assistant — auto-ask contextual safety questions
+        try:
+            questions = get_safety_questions({
+                'trigger_method': trigger_method,
+                'threat_level': threat_level,
+                'location_name': location_name,
+            })
+            for q in questions:
+                ai_q = ChatMessage(
+                    alert_id=alert_id,
+                    sender_type='ai_assistant',
+                    sender_name='🤖 Safety AI',
+                    message=q,
+                    is_quick_reply=False
+                )
+                session.add(ai_q)
+                session.commit()
+                socketio.emit('new_chat_message', ai_q.to_dict())
+        except Exception as e:
+            print(f"[AI Assistant] Safety questions failed: {e}")
 
         return jsonify({
             'message': 'SOS alert triggered',
@@ -682,6 +742,88 @@ def get_chat(alert_id):
         return jsonify({'error': str(e)}), 500
     finally:
         session.close()
+
+
+@app.route('/api/ai/summary/<alert_id>', methods=['GET'])
+def get_ai_summary(alert_id):
+    """Generate AI-powered incident summary for an alert"""
+    session = get_session(engine)
+    try:
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        if not alert:
+            return jsonify({'error': 'Alert not found'}), 404
+
+        alert_dict = alert.to_dict(include_sensitive=True)
+        # Add location name
+        if alert.latitude and alert.longitude:
+            alert_dict['location_name'] = get_location_name(alert.latitude, alert.longitude)
+
+        # Get chat messages
+        messages = session.query(ChatMessage).filter_by(
+            alert_id=alert_id
+        ).order_by(ChatMessage.timestamp.asc()).all()
+        chat_list = [m.to_dict() for m in messages]
+
+        summary = generate_incident_summary(alert_dict, chat_list)
+        return jsonify({'summary': summary, 'alert_id': alert_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/ai/analyse-chat/<alert_id>', methods=['POST'])
+def analyse_chat(alert_id):
+    """AI analyses chat messages and recommends escalation"""
+    session = get_session(engine)
+    try:
+        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+        if not alert:
+            return jsonify({'error': 'Alert not found'}), 404
+
+        messages = session.query(ChatMessage).filter_by(
+            alert_id=alert_id
+        ).order_by(ChatMessage.timestamp.asc()).all()
+        chat_list = [m.to_dict() for m in messages]
+
+        result = analyse_chat_for_escalation(chat_list, alert.threat_level.value)
+        if result and result.get('escalate') and result.get('new_threat_level'):
+            new_level = result['new_threat_level']
+            alert.threat_level = ThreatLevel[new_level.upper()]
+            session.commit()
+
+            # Notify via chat
+            esc_msg = ChatMessage(
+                alert_id=alert_id,
+                sender_type='ai_assistant',
+                sender_name='🤖 Safety AI',
+                message=f'⚠️ Threat escalated to {new_level.upper()}: {result.get("reasoning", "")}',
+            )
+            session.add(esc_msg)
+            session.commit()
+            socketio.emit('new_chat_message', esc_msg.to_dict())
+            socketio.emit('alert_status_changed', {
+                'alert_id': alert_id,
+                'status': alert.status.value,
+                'threat_level': new_level
+            })
+
+        return jsonify({'analysis': result or {'escalate': False, 'reasoning': 'AI unavailable'}})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route('/api/ai/geocode', methods=['GET'])
+def geocode_location():
+    """Reverse geocode a lat/lon to readable address"""
+    lat = request.args.get('lat', type=float)
+    lon = request.args.get('lon', type=float)
+    if lat is None or lon is None:
+        return jsonify({'error': 'lat and lon required'}), 400
+    name = get_location_name(lat, lon)
+    return jsonify({'location_name': name, 'lat': lat, 'lon': lon})
 
 
 @app.route('/api/stats', methods=['GET'])
@@ -1457,23 +1599,40 @@ def simulate_sos():
         trigger_method = data.get('trigger_method', 'button')
         alert_id = str(uuid.uuid4())
 
-        # Run AI assessment with danger zone boost
-        alert_data = {'latitude': lat, 'longitude': lon, 'trigger_method': trigger_method, 'user_id': demo_user.id}
-        threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
-
-        # Check danger zones for AI boost
+        # Gather danger zones for AI context
         danger_zones = session.query(DangerZone).filter_by(is_active=True).all()
+        dz_nearby = []
         for zone in danger_zones:
-            dist = calculate_distance(lat, lon, zone.latitude, zone.longitude)
-            if dist < (zone.radius_meters / 1000.0):
-                risk_factors['overall_risk_score'] = min(risk_factors.get('overall_risk_score', 0.5) + 0.15, 1.0)
-                risk_factors['danger_zone_boost'] = True
-                risk_factors['danger_zone_category'] = zone.category
-                if risk_factors['overall_risk_score'] >= 0.8:
-                    threat_level = 'critical'
-                elif risk_factors['overall_risk_score'] >= 0.6:
-                    threat_level = 'high'
-                break
+            if calculate_distance(lat, lon, zone.latitude, zone.longitude) < 0.5:
+                dz_nearby.append({'category': zone.category, 'report_count': zone.report_count})
+
+        # Try Gemini AI first, fallback to rule-based
+        alert_data = {
+            'latitude': lat, 'longitude': lon, 'location_name': area,
+            'trigger_method': trigger_method, 'user_id': demo_user.id,
+            'prior_alerts': session.query(Alert).filter_by(user_id=demo_user.id).count()
+        }
+        ai_result = assess_threat_with_ai(alert_data, dz_nearby)
+        if ai_result:
+            threat_level = ai_result.get('threat_level', 'high')
+            confidence = ai_result.get('confidence', 0.8)
+            risk_factors = ai_result.get('risk_factors', {})
+            risk_factors['overall_risk_score'] = ai_result.get('risk_score', 0.7)
+            risk_factors['reasoning'] = ai_result.get('reasoning', '')
+            risk_factors['ai_source'] = 'gemini'
+        else:
+            threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
+            risk_factors['ai_source'] = 'rule-based'
+            # Manual danger zone boost for rule-based
+            for zone in danger_zones:
+                dist = calculate_distance(lat, lon, zone.latitude, zone.longitude)
+                if dist < (zone.radius_meters / 1000.0):
+                    risk_factors['overall_risk_score'] = min(risk_factors.get('overall_risk_score', 0.5) + 0.15, 1.0)
+                    if risk_factors['overall_risk_score'] >= 0.8:
+                        threat_level = 'critical'
+                    elif risk_factors['overall_risk_score'] >= 0.6:
+                        threat_level = 'high'
+                    break
 
         alert = Alert(
             alert_id=alert_id,
@@ -1493,6 +1652,10 @@ def simulate_sos():
         alert_dict = alert.to_dict(include_sensitive=True)
         alert_dict['user'] = demo_user.to_dict()
         alert_dict['_demo_area'] = area
+        alert_dict['location_name'] = area
+        alert_dict['ai_source'] = risk_factors.get('ai_source', 'unknown')
+        if ai_result:
+            alert_dict['ai_reasoning'] = ai_result.get('reasoning', '')
         active_alerts[alert_id] = alert_dict
         socketio.emit('alert_triggered', alert_dict)
 
@@ -1515,9 +1678,11 @@ def simulate_sos():
             })
 
         # Auto system chat messages
+        ai_tag = '🤖 Gemini AI' if risk_factors.get('ai_source') == 'gemini' else '📊 Rule Engine'
+        reasoning = risk_factors.get('reasoning', '')
         sys_msg = ChatMessage(
             alert_id=alert_id, sender_type='system', sender_name='NaariRakshak',
-            message=f'🚨 SOS triggered via {trigger_method} near {area}. Threat: {threat_level.upper()}. AI confidence: {int(confidence*100)}%.'
+            message=f'🚨 SOS triggered via {trigger_method} near {area}. Threat: {threat_level.upper()} ({ai_tag}, {int(confidence*100)}% confidence). {reasoning}'
         )
         session.add(sys_msg)
         session.commit()
