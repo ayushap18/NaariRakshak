@@ -190,7 +190,7 @@
       color: #8AB4F8;
     }
 
-    .ai-gemini-tag {
+    .ai-llama-tag {
       background: rgba(66,133,244,0.2); color: #8AB4F8;
       font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600;
     }
@@ -1468,7 +1468,7 @@ function buildAlertCard(a) {
   actionBtns += `<button class="btn btn-chat" onclick="event.stopPropagation();openChatPanel('${a.alert_id}')">💬 Chat${badge}</button>`;
   actionBtns += `<button class="btn btn-ai-summary" onclick="event.stopPropagation();getAISummary('${a.alert_id}')" title="AI Incident Summary">🤖 Summary</button>`;
 
-  const aiSource = a.ai_source === 'gemini' ? '<span class="ai-gemini-tag">🤖 Gemini</span>' : (a.ai_source === 'rule-based' ? '<span class="ai-rule-tag">📊 Rules</span>' : '');
+  const aiSource = a.ai_source === 'groq-llama' ? '<span class="ai-llama-tag">🤖 Llama AI</span>' : (a.ai_source === 'rule-based' ? '<span class="ai-rule-tag">📊 Rules</span>' : '');
   const aiReasoning = a.ai_reasoning ? `<div class="ai-reasoning">${escapeHtml(a.ai_reasoning)}</div>` : '';
 
   return `
@@ -1775,7 +1775,7 @@ async function getAISummary(alertId) {
     <div class="ai-summary-content">
       <button class="ai-summary-close" onclick="document.getElementById('ai-summary-modal').remove()">✕</button>
       <h3>🤖 AI Incident Summary</h3>
-      <p id="ai-summary-text">Generating summary with Gemini AI...</p>
+      <p id="ai-summary-text">Generating summary with Llama AI...</p>
     </div>
   `;
   document.body.appendChild(modal);

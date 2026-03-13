@@ -229,7 +229,7 @@ def trigger_sos():
             risk_factors['overall_risk_score'] = ai_result.get('risk_score', 0.7)
             risk_factors['reasoning'] = ai_result.get('reasoning', '')
             risk_factors['recommended_actions'] = ai_result.get('recommended_actions', [])
-            risk_factors['ai_source'] = 'gemini'
+            risk_factors['ai_source'] = 'groq-llama'
         else:
             # Fallback to rule-based engine
             threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
@@ -306,7 +306,7 @@ def trigger_sos():
                 }, room=f'user_{user.id}')
 
         # Auto-send system chat message so dashboard sees context immediately
-        ai_tag = '🤖 Gemini AI' if risk_factors.get('ai_source') == 'gemini' else '📊 Rule Engine'
+        ai_tag = '🤖 Llama AI' if risk_factors.get('ai_source') == 'groq-llama' else '📊 Rule Engine'
         reasoning = risk_factors.get('reasoning', '')
         sys_msg = ChatMessage(
             alert_id=alert_id,
@@ -1619,7 +1619,7 @@ def simulate_sos():
             risk_factors = ai_result.get('risk_factors', {})
             risk_factors['overall_risk_score'] = ai_result.get('risk_score', 0.7)
             risk_factors['reasoning'] = ai_result.get('reasoning', '')
-            risk_factors['ai_source'] = 'gemini'
+            risk_factors['ai_source'] = 'groq-llama'
         else:
             threat_level, confidence, risk_factors = threat_engine.assess_threat_level(alert_data)
             risk_factors['ai_source'] = 'rule-based'
@@ -1678,7 +1678,7 @@ def simulate_sos():
             })
 
         # Auto system chat messages
-        ai_tag = '🤖 Gemini AI' if risk_factors.get('ai_source') == 'gemini' else '📊 Rule Engine'
+        ai_tag = '🤖 Llama AI' if risk_factors.get('ai_source') == 'groq-llama' else '📊 Rule Engine'
         reasoning = risk_factors.get('reasoning', '')
         sys_msg = ChatMessage(
             alert_id=alert_id, sender_type='system', sender_name='NaariRakshak',

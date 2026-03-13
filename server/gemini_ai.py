@@ -1,5 +1,5 @@
 """
-Gemini AI Integration for NaariRakshak
+AI Integration for NaariRakshak (Groq — Llama 3.3 70B)
 - Threat assessment with real AI reasoning
 - AI chat assistant for SOS situations
 - Incident summary generation
@@ -11,41 +11,48 @@ import requests
 from datetime import datetime, timezone
 
 # ---------------------------------------------------------------------------
-# Init — using new google-genai SDK
+# Init — Groq API (Llama 3.3 70B, free tier)
 # ---------------------------------------------------------------------------
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 MAPS_API_KEY = os.environ.get('MAPS_API_KEY', '')
 
 _client = None
 
 def _get_client():
     global _client
-    if _client is None and GEMINI_API_KEY:
-        from google import genai
-        _client = genai.Client(api_key=GEMINI_API_KEY)
+    if _client is None and GROQ_API_KEY:
+        from groq import Groq
+        _client = Groq(api_key=GROQ_API_KEY)
     return _client
 
 def _generate(prompt: str) -> str:
-    """Call Gemini and return text response. Returns None on failure. Tries multiple models."""
+    """Call Groq Llama and return text response. Returns None on failure."""
     client = _get_client()
     if client is None:
+        print("[AI] No GROQ_API_KEY set — falling back to rule-based")
         return None
-    models_to_try = ['gemini-2.0-flash', 'gemini-2.0-flash-lite']
+    models_to_try = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
     for model in models_to_try:
         try:
-            response = client.models.generate_content(
+            response = client.chat.completions.create(
                 model=model,
-                contents=prompt
+                messages=[
+                    {"role": "system", "content": "You are NaariRakshak, an AI women's safety system deployed in Delhi-NCR, India. Respond precisely in the format requested."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500,
+                temperature=0.3
             )
-            return response.text.strip() if response.text else None
+            text = response.choices[0].message.content
+            return text.strip() if text else None
         except Exception as e:
             err_str = str(e)
-            if 'RESOURCE_EXHAUSTED' in err_str or '429' in err_str:
-                print(f"[GeminiAI] Quota exhausted for {model}, trying next...")
+            if 'rate_limit' in err_str.lower() or '429' in err_str:
+                print(f"[AI] Rate limited on {model}, trying next...")
                 continue
-            print(f"[GeminiAI] API call failed ({model}): {e}")
+            print(f"[AI] API call failed ({model}): {e}")
             return None
-    print("[GeminiAI] All models quota exhausted — falling back to rule-based")
+    print("[AI] All models failed — falling back to rule-based")
     return None
 
 
@@ -115,7 +122,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
             text = text.strip()
         return json.loads(text)
     except Exception as e:
-        print(f"[GeminiAI] Threat assessment failed: {e}")
+        print(f"[AI] Threat assessment failed: {e}")
         return None
 
 
@@ -149,7 +156,7 @@ Respond ONLY with JSON array (no markdown):
             text = text.strip()
         return json.loads(text)
     except Exception as e:
-        print(f"[GeminiAI] Safety questions failed: {e}")
+        print(f"[AI] Safety questions failed: {e}")
         return _fallback_safety_questions()
 
 
@@ -196,7 +203,7 @@ Respond ONLY with JSON (no markdown):
             text = text.strip()
         return json.loads(text)
     except Exception as e:
-        print(f"[GeminiAI] Chat escalation analysis failed: {e}")
+        print(f"[AI] Chat escalation analysis failed: {e}")
         return None
 
 
@@ -234,7 +241,7 @@ Respond with plain text only (no JSON, no markdown)."""
             return text
         return _fallback_summary(alert)
     except Exception as e:
-        print(f"[GeminiAI] Incident summary failed: {e}")
+        print(f"[AI] Incident summary failed: {e}")
         return _fallback_summary(alert)
 
 
