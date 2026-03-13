@@ -860,9 +860,8 @@ def cctv_load():
 
 @app.route('/api/cctv/analyse-frame', methods=['POST'])
 def cctv_frame():
-    """Analyse a single image frame for violence"""
+    """Analyse a single image frame for threats using CLIP zero-shot"""
     if 'frame' not in request.files:
-        # Try base64 in JSON body
         data = request.get_json(silent=True) or {}
         b64 = data.get('frame_b64', '')
         if b64:
@@ -875,11 +874,13 @@ def cctv_frame():
 
     result = cctv_analyse_frame(image_bytes)
 
-    # If violence detected, auto-create alert and notify dashboard
-    if result.get('violence') and result.get('confidence', 0) >= 0.85:
+    # If threat detected, notify dashboard via socket
+    if result.get('threat_detected'):
         socketio.emit('cctv_violence_detected', {
-            'confidence': result['confidence'],
-            'label': result['label'],
+            'confidence': result.get('top_threat_score', 0),
+            'threat_type': result.get('top_threat', 'unknown'),
+            'label': result.get('label', 'Threat'),
+            'threat_scores': result.get('threat_scores', {}),
             'detected_at': datetime.now(timezone.utc).isoformat(),
             'source': 'cctv_frame'
         })

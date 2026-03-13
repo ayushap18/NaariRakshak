@@ -1,125 +1,88 @@
 """
-CCTV AI Violence Detection Module for NaariRakshak
-Uses ViT (Vision Transformer) model for frame-level violence classification.
-Model: jaranohaal/vit-base-violence-detection (98.8% accuracy)
+CCTV AI Threat Detection Module for NaariRakshak
+Uses OpenAI CLIP zero-shot for multi-category threat detection.
+Detects: violence, harassment, eve teasing, stalking, weapons, distress.
+Model: openai/clip-vit-base-patch32 (zero-shot, no specific training needed)
 """
 import os
-# macOS: prevent duplicate libomp crash
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
-# Prevent tqdm progress bars from crashing background threads under nohup
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import io
 import time
-import json
 import uuid
 import base64
 import threading
 from datetime import datetime, timezone
 
-# Pre-import torch before cv2 to avoid segfault from OpenMP library conflicts on macOS
 import torch
-torch.set_num_threads(1)  # Avoid OpenMP segfault when model is created in a worker thread
+torch.set_num_threads(1)
 
 import cv2
 import numpy as np
 from PIL import Image
 
-# Lazy-loaded model components
-_model = None
-_feature_extractor = None
+# ─── Model state ───
+_clip_model = None
+_clip_processor = None
 _model_lock = threading.Lock()
 _model_loading = False
 _model_load_failed = False
 _model_fail_time = 0
-_MODEL_RETRY_COOLDOWN = 30  # seconds before retrying after failure
+_MODEL_RETRY_COOLDOWN = 30
 
-MODEL_ID = "jaranohaal/vit-base-violence-detection"
-CONFIDENCE_THRESHOLD = 0.85
-FRAME_SAMPLE_INTERVAL = 15  # analyse every Nth frame
+MODEL_ID = "openai/clip-vit-base-patch32"
+THREAT_THRESHOLD = 0.30  # threat score above this = alert
+FRAME_SAMPLE_INTERVAL = 15
 
+# ─── Safety threat labels for zero-shot classification ───
+THREAT_LABELS = {
+    "violence": "a photo of people fighting, punching, kicking, physical assault, beating someone",
+    "harassment": "a photo of a man aggressively grabbing a woman, eve teasing, unwanted physical contact",
+    "stalking": "a photo of a person secretly following another person on the street, trailing someone closely",
+    "weapon_threat": "a photo of a person holding a knife or gun and threatening another person",
+    "distress": "a photo of a woman screaming for help while being attacked or grabbed by someone",
+    "robbery": "a photo of someone violently snatching a bag or purse from a person on the street",
+}
 
-def _convert_timm_to_hf(timm_state):
-    """Convert timm ViT state dict keys to HuggingFace ViT format."""
-    hf = {}
-    hf['vit.embeddings.cls_token'] = timm_state['cls_token']
-    hf['vit.embeddings.position_embeddings'] = timm_state['pos_embed']
-    hf['vit.embeddings.patch_embeddings.projection.weight'] = timm_state['patch_embed.proj.weight']
-    hf['vit.embeddings.patch_embeddings.projection.bias'] = timm_state['patch_embed.proj.bias']
-    hf['vit.layernorm.weight'] = timm_state['norm.weight']
-    hf['vit.layernorm.bias'] = timm_state['norm.bias']
-    hf['classifier.weight'] = timm_state['head.weight']
-    hf['classifier.bias'] = timm_state['head.bias']
-    for i in range(12):
-        t = f'blocks.{i}'
-        h = f'vit.encoder.layer.{i}'
-        hf[f'{h}.layernorm_before.weight'] = timm_state[f'{t}.norm1.weight']
-        hf[f'{h}.layernorm_before.bias'] = timm_state[f'{t}.norm1.bias']
-        hf[f'{h}.layernorm_after.weight'] = timm_state[f'{t}.norm2.weight']
-        hf[f'{h}.layernorm_after.bias'] = timm_state[f'{t}.norm2.bias']
-        hf[f'{h}.attention.output.dense.weight'] = timm_state[f'{t}.attn.proj.weight']
-        hf[f'{h}.attention.output.dense.bias'] = timm_state[f'{t}.attn.proj.bias']
-        # Split combined QKV into separate Q, K, V
-        q_w, k_w, v_w = timm_state[f'{t}.attn.qkv.weight'].chunk(3, dim=0)
-        q_b, k_b, v_b = timm_state[f'{t}.attn.qkv.bias'].chunk(3, dim=0)
-        hf[f'{h}.attention.attention.query.weight'] = q_w
-        hf[f'{h}.attention.attention.query.bias'] = q_b
-        hf[f'{h}.attention.attention.key.weight'] = k_w
-        hf[f'{h}.attention.attention.key.bias'] = k_b
-        hf[f'{h}.attention.attention.value.weight'] = v_w
-        hf[f'{h}.attention.attention.value.bias'] = v_b
-        hf[f'{h}.intermediate.dense.weight'] = timm_state[f'{t}.mlp.fc1.weight']
-        hf[f'{h}.intermediate.dense.bias'] = timm_state[f'{t}.mlp.fc1.bias']
-        hf[f'{h}.output.dense.weight'] = timm_state[f'{t}.mlp.fc2.weight']
-        hf[f'{h}.output.dense.bias'] = timm_state[f'{t}.mlp.fc2.bias']
-    return hf
+SAFE_LABELS = {
+    "normal_activity": "a photo of people walking normally on a street, everyday peaceful activity",
+    "empty_scene": "a photo of an empty room, empty street, or empty area with no people",
+    "indoor_normal": "a photo of a normal indoor scene, office, home, classroom",
+    "dark_scene": "a photo of a dark empty room or dark empty street at night with no people visible",
+    "outdoor_normal": "a photo of a normal outdoor scene, park, parking lot, garden, building exterior",
+    "sitting_relaxing": "a photo of people sitting, relaxing, having a conversation peacefully",
+}
+
+# All labels combined for CLIP inference
+_all_labels = list(THREAT_LABELS.values()) + list(SAFE_LABELS.values())
+_all_keys = list(THREAT_LABELS.keys()) + list(SAFE_LABELS.keys())
 
 
 def _load_model():
-    """Lazy-load the ViT violence detection model."""
-    global _model, _feature_extractor, _model_loading, _model_load_failed, _model_fail_time
-    if _model is not None:
+    """Lazy-load the CLIP zero-shot model."""
+    global _clip_model, _clip_processor, _model_loading, _model_load_failed, _model_fail_time
+    if _clip_model is not None:
         return True
-    # Cooldown after a recent failure to avoid spamming
     if _model_load_failed and (time.time() - _model_fail_time) < _MODEL_RETRY_COOLDOWN:
         return False
     with _model_lock:
-        if _model is not None:
+        if _clip_model is not None:
             return True
         _model_loading = True
         try:
-            import torch
-            from transformers import ViTForImageClassification, ViTConfig
-            try:
-                from transformers import ViTImageProcessor as _ViTProcessor
-            except ImportError:
-                from transformers import ViTFeatureExtractor as _ViTProcessor
-            print(f"[CCTV-AI] Loading model {MODEL_ID}...")
-            _feature_extractor = _ViTProcessor.from_pretrained(MODEL_ID)
-
-            # The checkpoint uses timm weight format; convert to HF format
-            config = ViTConfig.from_pretrained(MODEL_ID)
-            config.id2label = {0: "non-violence", 1: "violence"}
-            config.label2id = {"non-violence": 0, "violence": 1}
-            _model = ViTForImageClassification(config)
-
-            from huggingface_hub import hf_hub_download
-            weights_path = hf_hub_download(MODEL_ID, filename="model.safetensors")
-            from safetensors.torch import load_file
-            timm_state = load_file(weights_path)
-
-            # Detect if weights are in timm format and convert
-            if any(k.startswith('blocks.') for k in timm_state):
-                timm_state = _convert_timm_to_hf(timm_state)
-
-            _model.load_state_dict(timm_state, strict=True)
-            _model.eval()
+            from transformers import CLIPModel, CLIPProcessor
+            print(f"[CCTV-AI] Loading CLIP model {MODEL_ID}...", flush=True)
+            _clip_processor = CLIPProcessor.from_pretrained(MODEL_ID, use_fast=False)
+            _clip_model = CLIPModel.from_pretrained(MODEL_ID)
+            _clip_model.eval()
             _model_load_failed = False
-            print(f"[CCTV-AI] Model loaded. Labels: {_model.config.id2label}")
+            print(f"[CCTV-AI] CLIP model loaded. {len(THREAT_LABELS)} threat + {len(SAFE_LABELS)} safe categories.")
             return True
         except Exception as e:
-            _model = None
-            print(f"[CCTV-AI] Failed to load model: {e}")
+            _clip_model = None
+            print(f"[CCTV-AI] Failed to load CLIP: {e}")
             _model_load_failed = True
             _model_fail_time = time.time()
             return False
@@ -128,7 +91,7 @@ def _load_model():
 
 
 def is_model_loaded():
-    return _model is not None
+    return _clip_model is not None
 
 
 def is_model_loading():
@@ -140,57 +103,78 @@ def get_model_status():
         "loaded": is_model_loaded(),
         "loading": is_model_loading(),
         "model_id": MODEL_ID,
-        "confidence_threshold": CONFIDENCE_THRESHOLD,
-        "frame_interval": FRAME_SAMPLE_INTERVAL
+        "threat_threshold": THREAT_THRESHOLD,
+        "frame_interval": FRAME_SAMPLE_INTERVAL,
+        "threat_categories": list(THREAT_LABELS.keys()),
+        "safe_categories": list(SAFE_LABELS.keys()),
     }
 
 
 def analyse_frame(image_bytes: bytes) -> dict:
     """
-    Analyse a single image frame for violence.
-    Returns: {violence: bool, confidence: float, label: str, raw_scores: {}}
+    Analyse a single frame using CLIP zero-shot against safety threat labels.
+    Returns scores for each threat category + overall threat assessment.
     """
     if not _load_model():
-        return {"error": "Model not available", "violence": False, "confidence": 0}
+        return {"error": "Model not available", "threat_detected": False, "threat_score": 0}
 
-    import torch
     try:
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        inputs = _feature_extractor(images=image, return_tensors="pt")
+        inputs = _clip_processor(
+            text=_all_labels, images=image, return_tensors="pt", padding=True
+        )
         with torch.no_grad():
-            outputs = _model(**inputs)
-            logits = outputs.logits
-            probs = torch.nn.functional.softmax(logits, dim=-1)[0]
+            outputs = _clip_model(**inputs)
+            logits = outputs.logits_per_image[0]
+            probs = logits.softmax(dim=-1)
 
+        # Map probabilities to category names
         scores = {}
-        for idx, prob in enumerate(probs):
-            label = _model.config.id2label[idx]
-            scores[label] = round(prob.item(), 4)
+        for i, key in enumerate(_all_keys):
+            scores[key] = round(probs[i].item(), 4)
 
-        # Get the violence class score (exact match, not substring)
-        violence_score = scores.get('violence', 0.0)
+        # Compute threat vs safe scores (use averages to normalize for label count)
+        threat_scores = {k: scores[k] for k in THREAT_LABELS}
+        safe_scores = {k: scores[k] for k in SAFE_LABELS}
+        max_threat_key = max(threat_scores, key=threat_scores.get)
+        max_threat_score = threat_scores[max_threat_key]
+        total_threat = sum(threat_scores.values())
+        total_safe = sum(safe_scores.values())
+        avg_threat = total_threat / len(THREAT_LABELS)
+        avg_safe = total_safe / len(SAFE_LABELS)
 
-        is_violent = violence_score >= CONFIDENCE_THRESHOLD
-        predicted_idx = logits.argmax(-1).item()
-        predicted_label = _model.config.id2label[predicted_idx]
+        # Require: top single threat > 15% AND average threat > average safe
+        threat_detected = max_threat_score >= 0.15 and avg_threat > avg_safe
+
+        # Build readable label
+        if threat_detected:
+            label = max_threat_key.replace("_", " ").title()
+        else:
+            max_safe_key = max(safe_scores, key=safe_scores.get)
+            label = max_safe_key.replace("_", " ").title()
 
         return {
-            "violence": is_violent,
-            "confidence": round(violence_score, 4),
-            "label": predicted_label,
+            "threat_detected": threat_detected,
+            "threat_score": round(total_threat, 4),
+            "safe_score": round(total_safe, 4),
+            "top_threat": max_threat_key,
+            "top_threat_score": round(max_threat_score, 4),
+            "label": label,
+            "threat_scores": threat_scores,
+            "safe_scores": safe_scores,
+            "threshold": THREAT_THRESHOLD,
+            # Backward compat
+            "violence": threat_detected,
+            "confidence": round(max_threat_score, 4),
             "raw_scores": scores,
-            "threshold": CONFIDENCE_THRESHOLD
         }
     except Exception as e:
         print(f"[CCTV-AI] Frame analysis error: {e}")
-        return {"error": str(e), "violence": False, "confidence": 0}
+        return {"error": str(e), "threat_detected": False, "threat_score": 0, "violence": False, "confidence": 0}
 
 
 def analyse_video(video_path: str, progress_callback=None) -> dict:
-    """
-    Analyse a video file frame-by-frame.
-    Returns: {total_frames, analysed_frames, detections: [{frame_num, timestamp_sec, confidence, snapshot_b64}], summary}
-    """
+    """Analyse a video file frame-by-frame for threats."""
     if not _load_model():
         return {"error": "Model not available"}
 
@@ -204,7 +188,6 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
     analysed = 0
     frame_num = 0
     recording = False
-    record_start = None
     record_frames = []
 
     try:
@@ -214,7 +197,6 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
                 break
 
             if frame_num % FRAME_SAMPLE_INTERVAL == 0:
-                # Convert BGR to RGB and encode to bytes
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 pil_img = Image.fromarray(rgb)
                 buf = io.BytesIO()
@@ -224,9 +206,8 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
                 result = analyse_frame(img_bytes)
                 analysed += 1
 
-                if result.get('violence'):
+                if result.get('threat_detected'):
                     timestamp_sec = round(frame_num / fps, 2)
-                    # Create thumbnail
                     thumb = cv2.resize(frame, (320, 180))
                     _, thumb_enc = cv2.imencode('.jpg', thumb, [cv2.IMWRITE_JPEG_QUALITY, 70])
                     snapshot_b64 = base64.b64encode(thumb_enc).decode('utf-8')
@@ -234,17 +215,17 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
                     detection = {
                         "frame_num": frame_num,
                         "timestamp_sec": timestamp_sec,
-                        "confidence": result['confidence'],
+                        "confidence": result['top_threat_score'],
+                        "threat_type": result['top_threat'],
                         "label": result['label'],
+                        "threat_scores": result['threat_scores'],
                         "snapshot_b64": snapshot_b64,
                         "detected_at": datetime.now(timezone.utc).isoformat()
                     }
                     detections.append(detection)
 
-                    # Start recording violent segment
                     if not recording:
                         recording = True
-                        record_start = max(0, frame_num - int(fps * 2))
                         record_frames = []
 
                 if progress_callback and analysed % 5 == 0:
@@ -254,7 +235,6 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
                         "detections_so_far": len(detections)
                     })
 
-            # Collect frames if recording violence segment
             if recording:
                 record_frames.append(frame)
                 if len(record_frames) > int(fps * 10):
@@ -264,10 +244,9 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
     finally:
         cap.release()
 
-    # Save recorded violent clip if any
     clip_path = None
     if record_frames and len(record_frames) > 10:
-        clip_path = os.path.join('evidence', f'violence_{uuid.uuid4().hex[:8]}.mp4')
+        clip_path = os.path.join('evidence', f'threat_{uuid.uuid4().hex[:8]}.mp4')
         os.makedirs('evidence', exist_ok=True)
         h, w = record_frames[0].shape[:2]
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -275,7 +254,7 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
         for f in record_frames:
             writer.write(f)
         writer.release()
-        print(f"[CCTV-AI] Saved violence clip: {clip_path}")
+        print(f"[CCTV-AI] Saved threat clip: {clip_path}")
 
     return {
         "total_frames": frame_num,
@@ -292,12 +271,19 @@ def analyse_video(video_path: str, progress_callback=None) -> dict:
 
 def _build_summary(detections, total_frames, fps):
     if not detections:
-        return "No violence detected in the video feed."
+        return "No threats detected in the video feed. Scene appears safe."
     duration = round(total_frames / fps, 1)
+    # Group by threat type
+    types = {}
+    for d in detections:
+        t = d.get('threat_type', 'unknown')
+        types[t] = types.get(t, 0) + 1
+    type_str = ", ".join(f"{k.replace('_',' ')}: {v}" for k, v in types.items())
     first = detections[0]
     avg_conf = round(sum(d['confidence'] for d in detections) / len(detections), 2)
     return (
-        f"⚠️ Violence detected: {len(detections)} incident(s) over {duration}s video. "
-        f"First detection at {first['timestamp_sec']}s with {first['confidence']*100:.0f}% confidence. "
-        f"Average confidence: {avg_conf*100:.0f}%. Clip recorded for evidence."
+        f"⚠️ {len(detections)} threat(s) detected over {duration}s video. "
+        f"Types: {type_str}. "
+        f"First at {first['timestamp_sec']}s ({first['label']}, {first['confidence']*100:.0f}%). "
+        f"Avg confidence: {avg_conf*100:.0f}%."
     )

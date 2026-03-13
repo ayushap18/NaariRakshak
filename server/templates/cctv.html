@@ -171,6 +171,32 @@
 
     /* HIDDEN */
     .hidden { display: none !important; }
+
+    /* THREAT BARS */
+    .threat-bar-item {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+    }
+    .tb-label { width: 100px; flex-shrink: 0; font-weight: 600; }
+    .tb-track {
+      flex: 1; height: 10px; background: rgba(255,255,255,0.06); border-radius: 5px; overflow: hidden;
+    }
+    .tb-fill {
+      height: 100%; border-radius: 5px; transition: width 0.4s ease, background 0.4s;
+      width: 0%; background: var(--success);
+    }
+    .tb-val { width: 44px; text-align: right; font-weight: 700; font-size: 11px; }
+
+    /* Webcam overlay for live status */
+    .webcam-overlay {
+      position: absolute; top: 12px; left: 12px; right: 12px;
+      display: flex; justify-content: space-between; pointer-events: none; z-index: 10;
+    }
+    .webcam-badge {
+      padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;
+      backdrop-filter: blur(8px);
+    }
+    .webcam-badge.safe { background: rgba(46,125,50,0.8); color: #fff; }
+    .webcam-badge.danger { background: rgba(229,57,53,0.9); color: #fff; animation: pulse-dot 0.8s infinite; }
   </style>
 </head>
 <body>
@@ -179,7 +205,7 @@
     <header>
       <div class="logo">NAARI<span>RAKSHAK</span></div>
       <div class="sep"></div>
-      <div class="page-title">CCTV AI Violence Detection</div>
+      <div class="page-title">CCTV AI Threat Detection — CLIP Zero-Shot</div>
       <div class="hdr-right">
         <span id="model-status-badge" style="font-size:12px; color:var(--muted);">Model: checking…</span>
         <a class="hdr-btn" href="/">← Dashboard</a>
@@ -197,15 +223,28 @@
           </div>
           <div class="stat-card">
             <div class="stat-val red" id="stat-detections">0</div>
-            <div class="stat-label">Violence Detected</div>
+            <div class="stat-label">Threats Detected</div>
           </div>
           <div class="stat-card">
             <div class="stat-val green" id="stat-safe">0</div>
             <div class="stat-label">Safe Frames</div>
           </div>
           <div class="stat-card">
-            <div class="stat-val yellow" id="stat-confidence">—</div>
-            <div class="stat-label">Avg Confidence</div>
+            <div class="stat-val yellow" id="stat-top-threat">—</div>
+            <div class="stat-label">Top Threat Type</div>
+          </div>
+        </div>
+
+        <!-- Threat Categories -->
+        <div class="card" id="threat-bars-card">
+          <div class="card-title">🎯 Live Threat Scores</div>
+          <div id="threat-bars" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+            <div class="threat-bar-item" data-key="violence"><span class="tb-label">🥊 Violence</span><div class="tb-track"><div class="tb-fill" id="bar-violence"></div></div><span class="tb-val" id="val-violence">—</span></div>
+            <div class="threat-bar-item" data-key="harassment"><span class="tb-label">🚫 Harassment</span><div class="tb-track"><div class="tb-fill" id="bar-harassment"></div></div><span class="tb-val" id="val-harassment">—</span></div>
+            <div class="threat-bar-item" data-key="stalking"><span class="tb-label">👁️ Stalking</span><div class="tb-track"><div class="tb-fill" id="bar-stalking"></div></div><span class="tb-val" id="val-stalking">—</span></div>
+            <div class="threat-bar-item" data-key="weapon_threat"><span class="tb-label">🔪 Weapon</span><div class="tb-track"><div class="tb-fill" id="bar-weapon_threat"></div></div><span class="tb-val" id="val-weapon_threat">—</span></div>
+            <div class="threat-bar-item" data-key="distress"><span class="tb-label">😰 Distress</span><div class="tb-track"><div class="tb-fill" id="bar-distress"></div></div><span class="tb-val" id="val-distress">—</span></div>
+            <div class="threat-bar-item" data-key="robbery"><span class="tb-label">💰 Robbery</span><div class="tb-track"><div class="tb-fill" id="bar-robbery"></div></div><span class="tb-val" id="val-robbery">—</span></div>
           </div>
         </div>
 
@@ -239,6 +278,10 @@
           <div id="tab-webcam" class="hidden">
             <div class="webcam-section">
               <div class="webcam-preview">
+                <div class="webcam-overlay">
+                  <span class="webcam-badge safe" id="webcam-badge">● IDLE</span>
+                  <span class="webcam-badge safe" id="webcam-threat-badge"></span>
+                </div>
                 <video id="webcam-video" autoplay muted playsinline></video>
                 <canvas id="webcam-canvas" class="hidden"></canvas>
               </div>
@@ -311,8 +354,10 @@
     let totalAnalysed = 0;
     let totalDetections = 0;
     let totalSafe = 0;
-    let confidenceSum = 0;
+    let threatTypeCounts = {};
     let eventList = [];
+    const THREAT_KEYS = ['violence', 'harassment', 'stalking', 'weapon_threat', 'distress', 'robbery'];
+    const THREAT_ICONS = { violence: '🥊', harassment: '🚫', stalking: '👁️', weapon_threat: '🔪', distress: '😰', robbery: '💰' };
 
     // ─── INIT ───
     document.addEventListener('DOMContentLoaded', () => {
@@ -338,17 +383,40 @@
         .then(data => {
           const badge = document.getElementById('model-status-badge');
           if (data.loaded) {
-            badge.innerHTML = '<span style="color:#4CAF50;">● Model Ready</span>';
+            badge.innerHTML = '<span style="color:#4CAF50;">● CLIP Ready</span>';
           } else if (data.loading) {
-            badge.innerHTML = '<span style="color:var(--warning);">◌ Loading model…</span>';
+            badge.innerHTML = '<span style="color:var(--warning);">◌ Loading CLIP…</span>';
             setTimeout(checkModelStatus, 3000);
           } else {
-            badge.innerHTML = '<span style="color:var(--muted);">○ Model idle</span>';
+            badge.innerHTML = '<span style="color:var(--muted);">○ Model idle — <a href="#" onclick="loadModel();return false" style="color:var(--info);">Load</a></span>';
           }
         })
         .catch(() => {
           document.getElementById('model-status-badge').textContent = 'Model: offline';
         });
+    }
+
+    function loadModel() {
+      fetch('/api/cctv/load-model', { method: 'POST' }).then(() => {
+        document.getElementById('model-status-badge').innerHTML = '<span style="color:var(--warning);">◌ Loading…</span>';
+        setTimeout(checkModelStatus, 2000);
+      });
+    }
+
+    // ─── UPDATE THREAT BARS ───
+    function updateThreatBars(threatScores) {
+      if (!threatScores) return;
+      THREAT_KEYS.forEach(key => {
+        const score = threatScores[key] || 0;
+        const pct = (score * 100).toFixed(1);
+        const bar = document.getElementById('bar-' + key);
+        const val = document.getElementById('val-' + key);
+        if (bar) {
+          bar.style.width = pct + '%';
+          bar.style.background = score > 0.15 ? (score > 0.25 ? 'var(--accent)' : 'var(--warning)') : 'var(--success)';
+        }
+        if (val) val.textContent = pct + '%';
+      });
     }
 
     // ─── DRAG & DROP ───
@@ -381,59 +449,43 @@
     function uploadVideo(file) {
       const formData = new FormData();
       formData.append('video', file);
-
-      // Show progress
       document.getElementById('upload-progress').classList.remove('hidden');
       document.getElementById('video-results').classList.add('hidden');
       document.getElementById('result-banner').classList.add('hidden');
-      document.getElementById('progress-label').textContent = `Uploading ${file.name}…`;
+      document.getElementById('progress-label').textContent = `Analysing ${file.name}…`;
       document.getElementById('progress-pct').textContent = '0%';
       document.getElementById('progress-bar').style.width = '0%';
+      addEvent('info', `Uploading: ${file.name} (${(file.size/1048576).toFixed(1)}MB)`);
 
-      addEvent('info', `Uploading video: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
-
-      fetch('/api/cctv/analyse-video', {
-        method: 'POST',
-        body: formData
-      })
+      fetch('/api/cctv/analyse-video', { method: 'POST', body: formData })
         .then(r => r.json())
         .then(data => {
           document.getElementById('upload-progress').classList.add('hidden');
-          if (data.error) {
-            showBanner('danger', '❌ ' + data.error);
-            addEvent('violence', 'Error: ' + data.error);
-            return;
-          }
+          if (data.error) { showBanner('danger', '❌ ' + data.error); return; }
           showVideoResults(data);
         })
         .catch(err => {
           document.getElementById('upload-progress').classList.add('hidden');
-          showBanner('danger', '❌ Upload failed: ' + err.message);
+          showBanner('danger', '❌ ' + err.message);
         });
     }
 
     function showVideoResults(data) {
-      // Update stats
       totalAnalysed += data.analysed_frames || 0;
       const dets = data.detections || [];
       totalDetections += dets.length;
       totalSafe += (data.analysed_frames || 0) - dets.length;
-      updateStats();
 
-      // Banner
       if (data.violence_detected) {
-        showBanner('danger', `⚠️ Violence Detected — ${dets.length} incident(s) in ${data.duration_sec}s video`);
-        addEvent('violence', `Violence detected: ${dets.length} incident(s)`);
+        showBanner('danger', `⚠️ ${dets.length} Threat(s) Detected in ${data.duration_sec}s video`);
+        dets.forEach(d => addEvent('violence', `${(THREAT_ICONS[d.threat_type]||'⚠️')} ${d.label} at ${d.timestamp_sec}s (${(d.confidence*100).toFixed(0)}%)`));
       } else {
-        showBanner('safe', `✅ No violence detected — ${data.analysed_frames} frames analysed over ${data.duration_sec}s`);
-        addEvent('safe', 'Video analysis complete — no violence found');
+        showBanner('safe', `✅ No threats — ${data.analysed_frames} frames over ${data.duration_sec}s`);
+        addEvent('safe', 'Video safe — no threats found');
       }
 
-      // Summary
       document.getElementById('results-summary').textContent = data.summary || '';
       document.getElementById('video-results').classList.remove('hidden');
-
-      // Detection cards
       const container = document.getElementById('results-detections');
       container.innerHTML = '';
       dets.forEach(det => {
@@ -443,14 +495,12 @@
           ${det.snapshot_b64 ? `<img class="detection-thumb" src="data:image/jpeg;base64,${det.snapshot_b64}" />` : ''}
           <div class="detection-info">
             <div class="time">⏱ ${det.timestamp_sec}s — Frame #${det.frame_num}</div>
-            <div class="conf high">${(det.confidence * 100).toFixed(1)}% confidence</div>
-            <div style="color:var(--muted);">${det.label}</div>
+            <div class="conf high">${(THREAT_ICONS[det.threat_type]||'')} ${det.label} — ${(det.confidence*100).toFixed(1)}%</div>
           </div>
         `;
         container.appendChild(card);
-        confidenceSum += det.confidence;
       });
-      if (dets.length > 0) updateStats();
+      updateStats();
     }
 
     // ─── SINGLE FRAME ───
@@ -462,12 +512,9 @@
     function uploadFrame(file) {
       const reader = new FileReader();
       reader.onload = () => {
-        // Show preview
         document.getElementById('frame-preview').src = reader.result;
         document.getElementById('frame-result').classList.remove('hidden');
-        document.getElementById('frame-details').innerHTML = '<span style="color:var(--muted);">Analysing…</span>';
-
-        // Send as base64
+        document.getElementById('frame-details').innerHTML = '<span style="color:var(--muted);">Analysing with CLIP…</span>';
         const b64 = reader.result.split(',')[1];
         fetch('/api/cctv/analyse-frame', {
           method: 'POST',
@@ -477,34 +524,41 @@
           .then(r => r.json())
           .then(result => {
             totalAnalysed++;
-            if (result.violence) {
+            updateThreatBars(result.threat_scores);
+            if (result.threat_detected) {
               totalDetections++;
-              confidenceSum += result.confidence;
-              showBanner('danger', `⚠️ Violence detected — ${(result.confidence * 100).toFixed(1)}% confidence`);
-              addEvent('violence', `Frame: ${result.label} (${(result.confidence * 100).toFixed(1)}%)`);
+              const icon = THREAT_ICONS[result.top_threat] || '⚠️';
+              showBanner('danger', `⚠️ ${result.label} Detected — threat score: ${(result.threat_score*100).toFixed(1)}%`);
+              addEvent('violence', `${icon} ${result.label} (${(result.top_threat_score*100).toFixed(1)}%)`);
             } else {
               totalSafe++;
-              showBanner('safe', `✅ No violence detected — ${result.label}`);
-              addEvent('safe', `Frame: ${result.label}`);
+              showBanner('safe', `✅ Safe — ${result.label}`);
             }
             updateStats();
 
-            const scores = result.raw_scores || {};
-            let scoresHtml = Object.entries(scores).map(([k, v]) =>
-              `<div style="display:flex;justify-content:space-between;"><span>${k}</span><span style="font-weight:700;">${(v * 100).toFixed(1)}%</span></div>`
-            ).join('');
+            // Show detailed scores
+            let threatHtml = '<div style="margin-top:12px; font-weight:600; margin-bottom:6px;">Threat Scores:</div>';
+            const ts = result.threat_scores || {};
+            Object.entries(ts).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => {
+              const icon = THREAT_ICONS[k] || '';
+              const color = v > 0.2 ? 'var(--accent)' : v > 0.1 ? 'var(--warning)' : '#4CAF50';
+              threatHtml += `<div style="display:flex;justify-content:space-between;"><span>${icon} ${k.replace('_',' ')}</span><span style="font-weight:700;color:${color};">${(v*100).toFixed(1)}%</span></div>`;
+            });
+            let safeHtml = '<div style="margin-top:8px; font-weight:600; margin-bottom:6px;">Safe Scores:</div>';
+            const ss = result.safe_scores || {};
+            Object.entries(ss).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => {
+              safeHtml += `<div style="display:flex;justify-content:space-between;"><span>${k.replace('_',' ')}</span><span style="font-weight:700;color:#4CAF50;">${(v*100).toFixed(1)}%</span></div>`;
+            });
 
             document.getElementById('frame-details').innerHTML = `
               <div style="margin-bottom:8px;">
-                <span style="font-weight:700; font-size:14px; color:${result.violence ? 'var(--accent)' : '#4CAF50'};">
-                  ${result.violence ? '⚠️ VIOLENCE DETECTED' : '✅ SAFE'}
+                <span style="font-weight:700; font-size:15px; color:${result.threat_detected ? 'var(--accent)' : '#4CAF50'};">
+                  ${result.threat_detected ? '⚠️ THREAT: ' + result.label.toUpperCase() : '✅ SAFE — ' + result.label}
                 </span>
               </div>
-              <div style="margin-bottom:4px;"><strong>Label:</strong> ${result.label}</div>
-              <div style="margin-bottom:4px;"><strong>Confidence:</strong> ${(result.confidence * 100).toFixed(1)}%</div>
-              <div style="margin-bottom:4px;"><strong>Threshold:</strong> ${(result.threshold * 100)}%</div>
-              <div style="margin-top:12px; font-weight:600; margin-bottom:6px;">Scores:</div>
-              ${scoresHtml}
+              <div style="margin-bottom:4px;"><strong>Threat Score:</strong> ${(result.threat_score*100).toFixed(1)}%</div>
+              <div style="margin-bottom:4px;"><strong>Safe Score:</strong> ${(result.safe_score*100).toFixed(1)}%</div>
+              ${threatHtml}${safeHtml}
             `;
           })
           .catch(err => {
@@ -517,10 +571,11 @@
     // ─── WEBCAM ───
     async function startWebcam() {
       try {
-        webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
         document.getElementById('webcam-video').srcObject = webcamStream;
         document.getElementById('btn-start-webcam').disabled = true;
         document.getElementById('btn-start-monitor').disabled = false;
+        document.getElementById('webcam-badge').textContent = '● CAMERA ON';
         addEvent('info', 'Webcam started');
       } catch (err) {
         addEvent('violence', 'Webcam error: ' + err.message);
@@ -533,10 +588,11 @@
       document.getElementById('btn-start-monitor').disabled = true;
       document.getElementById('btn-stop-monitor').disabled = false;
       document.getElementById('live-dot').classList.remove('safe');
-      addEvent('info', 'Live monitoring started — capturing every 2s');
-
+      document.getElementById('webcam-badge').textContent = '● MONITORING';
+      document.getElementById('webcam-badge').className = 'webcam-badge safe';
+      addEvent('info', 'Live monitoring started — CLIP analysis every 3s');
       monitorInterval = setInterval(() => captureAndAnalyse(), 3000);
-      captureAndAnalyse(); // First capture immediately
+      captureAndAnalyse();
     }
 
     function stopMonitoring() {
@@ -544,14 +600,17 @@
       document.getElementById('btn-start-monitor').disabled = false;
       document.getElementById('btn-stop-monitor').disabled = true;
       document.getElementById('live-dot').classList.add('safe');
+      document.getElementById('webcam-badge').textContent = '● CAMERA ON';
+      document.getElementById('webcam-badge').className = 'webcam-badge safe';
+      document.getElementById('webcam-threat-badge').textContent = '';
       addEvent('info', 'Monitoring stopped');
     }
 
     function captureAndAnalyse() {
       const video = document.getElementById('webcam-video');
       const canvas = document.getElementById('webcam-canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
       canvas.toBlob(blob => {
@@ -567,23 +626,38 @@
             .then(r => r.json())
             .then(result => {
               totalAnalysed++;
-              if (result.violence) {
+              updateThreatBars(result.threat_scores);
+
+              const badge = document.getElementById('webcam-badge');
+              const threatBadge = document.getElementById('webcam-threat-badge');
+
+              if (result.threat_detected) {
                 totalDetections++;
-                confidenceSum += result.confidence;
-                addEvent('violence', `LIVE: ${result.label} (${(result.confidence * 100).toFixed(1)}%)`);
+                const icon = THREAT_ICONS[result.top_threat] || '⚠️';
+                const ttype = result.top_threat || 'unknown';
+                threatTypeCounts[ttype] = (threatTypeCounts[ttype] || 0) + 1;
+                badge.textContent = '⚠️ THREAT';
+                badge.className = 'webcam-badge danger';
+                threatBadge.textContent = `${icon} ${result.label}`;
+                threatBadge.className = 'webcam-badge danger';
+                addEvent('violence', `${icon} LIVE: ${result.label} (threat: ${(result.threat_score*100).toFixed(0)}%)`);
                 document.getElementById('webcam-status').innerHTML =
-                  `<span style="color:var(--accent); font-weight:700;">⚠️ VIOLENCE — ${(result.confidence * 100).toFixed(0)}%</span>`;
+                  `<span style="color:var(--accent); font-weight:700;">⚠️ ${result.label} — ${(result.threat_score*100).toFixed(0)}% threat</span>`;
               } else {
                 totalSafe++;
+                badge.textContent = '● SAFE';
+                badge.className = 'webcam-badge safe';
+                threatBadge.textContent = '';
+                threatBadge.className = 'webcam-badge safe';
                 document.getElementById('webcam-status').innerHTML =
-                  `<span style="color:#4CAF50;">✅ Safe — ${result.label} (${(result.confidence * 100).toFixed(1)}%)</span>`;
+                  `<span style="color:#4CAF50;">✅ Safe — ${result.label} (${(result.safe_score*100).toFixed(0)}%)</span>`;
               }
               updateStats();
             })
             .catch(() => {});
         };
         reader.readAsDataURL(blob);
-      }, 'image/jpeg', 0.7);
+      }, 'image/jpeg', 0.8);
     }
 
     // ─── UI HELPERS ───
@@ -598,19 +672,19 @@
       document.getElementById('stat-analysed').textContent = totalAnalysed;
       document.getElementById('stat-detections').textContent = totalDetections;
       document.getElementById('stat-safe').textContent = totalSafe;
-      const avg = totalDetections > 0 ? ((confidenceSum / totalDetections) * 100).toFixed(0) + '%' : '—';
-      document.getElementById('stat-confidence').textContent = avg;
+      // Show top threat type
+      const topThreat = Object.entries(threatTypeCounts).sort((a,b) => b[1]-a[1])[0];
+      document.getElementById('stat-top-threat').textContent = topThreat
+        ? (THREAT_ICONS[topThreat[0]] || '') + ' ' + topThreat[0].replace('_',' ')
+        : '—';
     }
 
     function addEvent(type, text) {
       const now = new Date();
       const timeStr = now.toLocaleTimeString('en-IN', { hour12: false });
       eventList.unshift({ type, text, time: timeStr });
-
       const container = document.getElementById('event-log');
-      // Clear placeholder on first event
       if (eventList.length === 1) container.innerHTML = '';
-
       const div = document.createElement('div');
       div.className = 'event-item';
       div.innerHTML = `
@@ -619,13 +693,8 @@
         <div class="event-time">${timeStr}</div>
       `;
       container.prepend(div);
-
-      // Keep max 100 events in DOM
       while (container.children.length > 100) container.removeChild(container.lastChild);
-
       document.getElementById('event-count').textContent = eventList.length + ' events';
-
-      // Pulse live dot on violence
       if (type === 'violence') {
         document.getElementById('live-dot').classList.remove('safe');
         setTimeout(() => {
@@ -640,14 +709,14 @@
         document.getElementById('progress-bar').style.width = data.progress + '%';
         document.getElementById('progress-pct').textContent = data.progress.toFixed(0) + '%';
         document.getElementById('progress-label').textContent =
-          `Analysing… ${data.analysed || 0} frames, ${data.detections_so_far || 0} detections`;
+          `Analysing… ${data.analysed || 0} frames, ${data.detections_so_far || 0} threats`;
       }
     });
 
     socket.on('cctv_violence_detected', data => {
-      // Only log if not from live webcam (avoid duplicates — webcam already logs in captureAndAnalyse)
       if (data.source !== 'cctv_frame') {
-        addEvent('violence', `Alert: ${data.label} (${(data.confidence * 100).toFixed(1)}%) from ${data.source}`);
+        const icon = THREAT_ICONS[data.threat_type] || '⚠️';
+        addEvent('violence', `${icon} Alert: ${data.label} from ${data.source}`);
       }
     });
   </script>
