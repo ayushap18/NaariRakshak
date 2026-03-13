@@ -1065,34 +1065,33 @@ def handle_location_update(data):
             return
         
         session = get_session(engine)
-        
-        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
-        if not alert:
+        try:
+            alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+            if not alert:
+                return
+            
+            # Create location update
+            location_update = LocationUpdate(
+                alert_id=alert.id,
+                latitude=latitude,
+                longitude=longitude,
+                accuracy=data.get('accuracy'),
+                speed=data.get('speed'),
+                heading=data.get('heading')
+            )
+            
+            session.add(location_update)
+            session.commit()
+            
+            # Broadcast to control centers
+            emit('location_updated', {
+                'alert_id': alert_id,
+                'latitude': latitude,
+                'longitude': longitude,
+                'timestamp': location_update.timestamp.isoformat()
+            }, broadcast=True)
+        finally:
             session.close()
-            return
-        
-        # Create location update
-        location_update = LocationUpdate(
-            alert_id=alert.id,
-            latitude=latitude,
-            longitude=longitude,
-            accuracy=data.get('accuracy'),
-            speed=data.get('speed'),
-            heading=data.get('heading')
-        )
-        
-        session.add(location_update)
-        session.commit()
-        
-        # Broadcast to control centers
-        emit('location_updated', {
-            'alert_id': alert_id,
-            'latitude': latitude,
-            'longitude': longitude,
-            'timestamp': location_update.timestamp.isoformat()
-        }, broadcast=True)
-        
-        session.close()
         
     except Exception as e:
         print(f'Error handling location update: {e}')
@@ -1106,42 +1105,42 @@ def handle_dispatch_responder(data):
         responder_id = data.get('responder_id')
         
         session = get_session(engine)
-        
-        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
-        responder = session.query(Responder).filter_by(
-            responder_id=responder_id
-        ).first()
-        
-        if alert and responder:
-            alert.status = AlertStatus.DISPATCHED
-            alert.dispatched_at = datetime.now(timezone.utc)
+        try:
+            alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+            responder = session.query(Responder).filter_by(
+                responder_id=responder_id
+            ).first()
             
-            # Update assigned responders
-            assigned = json.loads(alert.assigned_responders or '[]')
-            assigned.append(responder_id)
-            alert.assigned_responders = json.dumps(assigned)
-            
-            # Update responder status
-            responder.is_available = False
-            responder.current_alert_id = alert_id
-            
-            session.commit()
-            
-            # Notify user
-            if alert.user_id in active_users:
-                emit('responder_dispatched', {
+            if alert and responder:
+                alert.status = AlertStatus.DISPATCHED
+                alert.dispatched_at = datetime.now(timezone.utc)
+                
+                # Update assigned responders
+                assigned = json.loads(alert.assigned_responders or '[]')
+                assigned.append(responder_id)
+                alert.assigned_responders = json.dumps(assigned)
+                
+                # Update responder status
+                responder.is_available = False
+                responder.current_alert_id = alert_id
+                
+                session.commit()
+                
+                # Notify user
+                if alert.user_id in active_users:
+                    emit('responder_dispatched', {
+                        'alert_id': alert_id,
+                        'responder': responder.to_dict()
+                    }, room=f'user_{alert.user_id}')
+                
+                # Broadcast to control centers
+                emit('alert_status_changed', {
                     'alert_id': alert_id,
+                    'status': 'dispatched',
                     'responder': responder.to_dict()
-                }, room=f'user_{alert.user_id}')
-            
-            # Broadcast to control centers
-            emit('alert_status_changed', {
-                'alert_id': alert_id,
-                'status': 'dispatched',
-                'responder': responder.to_dict()
-            }, broadcast=True)
-        
-        session.close()
+                }, broadcast=True)
+        finally:
+            session.close()
         
     except Exception as e:
         print(f'Error dispatching responder: {e}')
@@ -1155,33 +1154,33 @@ def handle_update_alert_status(data):
         new_status = data.get('status')
         
         session = get_session(engine)
-        
-        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
-        if alert:
-            alert.status = AlertStatus[new_status.upper()]
-            
-            if new_status == 'resolved':
-                alert.resolved_at = datetime.now(timezone.utc)
+        try:
+            alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+            if alert:
+                alert.status = AlertStatus[new_status.upper()]
                 
-                # Make triggered_at timezone-aware if it's naive
-                triggered_at = alert.triggered_at
-                if triggered_at.tzinfo is None:
-                    triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+                if new_status == 'resolved':
+                    alert.resolved_at = datetime.now(timezone.utc)
+                    
+                    # Make triggered_at timezone-aware if it's naive
+                    triggered_at = alert.triggered_at
+                    if triggered_at.tzinfo is None:
+                        triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+                    
+                    alert.response_time_seconds = int(
+                        (alert.resolved_at - triggered_at).total_seconds()
+                    )
                 
-                alert.response_time_seconds = int(
-                    (alert.resolved_at - triggered_at).total_seconds()
-                )
-            
-            session.commit()
-            
-            # Broadcast status change
-            socketio.emit('alert_status_changed', {
-                'alert_id': alert_id,
-                'status': new_status,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
-        
-        session.close()
+                session.commit()
+                
+                # Broadcast status change
+                socketio.emit('alert_status_changed', {
+                    'alert_id': alert_id,
+                    'status': new_status,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+        finally:
+            session.close()
         
     except Exception as e:
         print(f'Error updating alert status: {e}')
@@ -1201,18 +1200,19 @@ def handle_chat_message(data):
             return
 
         session = get_session(engine)
-
-        chat_msg = ChatMessage(
-            alert_id=alert_id,
-            sender_type=sender_type,
-            sender_name=sender_name,
-            message=message,
-            is_quick_reply=is_quick_reply
-        )
-        session.add(chat_msg)
-        session.commit()
-        msg_dict = chat_msg.to_dict()
-        session.close()
+        try:
+            chat_msg = ChatMessage(
+                alert_id=alert_id,
+                sender_type=sender_type,
+                sender_name=sender_name,
+                message=message,
+                is_quick_reply=is_quick_reply
+            )
+            session.add(chat_msg)
+            session.commit()
+            msg_dict = chat_msg.to_dict()
+        finally:
+            session.close()
 
         # Broadcast to all connected clients
         socketio.emit('new_chat_message', msg_dict, broadcast=True)
@@ -1229,33 +1229,34 @@ def handle_volunteer_accept(data):
         responder_id = data.get('responder_id')
 
         session = get_session(engine)
-        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
-        responder = session.query(Responder).filter_by(responder_id=responder_id).first()
+        try:
+            alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+            responder = session.query(Responder).filter_by(responder_id=responder_id).first()
 
-        if alert and responder:
-            alert.status = AlertStatus.DISPATCHED
-            alert.dispatched_at = datetime.now(timezone.utc)
-            assigned = json.loads(alert.assigned_responders or '[]')
-            assigned.append(responder_id)
-            alert.assigned_responders = json.dumps(assigned)
-            responder.is_available = False
-            responder.current_alert_id = alert_id
-            session.commit()
+            if alert and responder:
+                alert.status = AlertStatus.DISPATCHED
+                alert.dispatched_at = datetime.now(timezone.utc)
+                assigned = json.loads(alert.assigned_responders or '[]')
+                assigned.append(responder_id)
+                alert.assigned_responders = json.dumps(assigned)
+                responder.is_available = False
+                responder.current_alert_id = alert_id
+                session.commit()
 
-            socketio.emit('alert_status_changed', {
-                'alert_id': alert_id,
-                'status': 'dispatched',
-                'responder': responder.to_dict()
-            }, broadcast=True)
-
-            # Notify user
-            if alert.user_id in active_users:
-                socketio.emit('responder_dispatched', {
+                socketio.emit('alert_status_changed', {
                     'alert_id': alert_id,
+                    'status': 'dispatched',
                     'responder': responder.to_dict()
-                }, room=f'user_{alert.user_id}')
+                }, broadcast=True)
 
-        session.close()
+                # Notify user
+                if alert.user_id in active_users:
+                    socketio.emit('responder_dispatched', {
+                        'alert_id': alert_id,
+                        'responder': responder.to_dict()
+                    }, room=f'user_{alert.user_id}')
+        finally:
+            session.close()
     except Exception as e:
         print(f'Error volunteer accept: {e}')
 
@@ -1269,33 +1270,34 @@ def handle_volunteer_status(data):
         status = data.get('status')  # en_route, arrived, resolved
 
         session = get_session(engine)
-        alert = session.query(Alert).filter_by(alert_id=alert_id).first()
-        responder = session.query(Responder).filter_by(responder_id=responder_id).first()
+        try:
+            alert = session.query(Alert).filter_by(alert_id=alert_id).first()
+            responder = session.query(Responder).filter_by(responder_id=responder_id).first()
 
-        if alert:
-            if status == 'resolved':
-                alert.status = AlertStatus.RESOLVED
-                alert.resolved_at = datetime.now(timezone.utc)
-                triggered_at = alert.triggered_at
-                if triggered_at.tzinfo is None:
-                    triggered_at = triggered_at.replace(tzinfo=timezone.utc)
-                alert.response_time_seconds = int((alert.resolved_at - triggered_at).total_seconds())
-                if responder:
-                    responder.is_available = True
-                    responder.current_alert_id = None
-                    responder.total_responses = (responder.total_responses or 0) + 1
-                if alert_id in active_alerts:
-                    del active_alerts[alert_id]
+            if alert:
+                if status == 'resolved':
+                    alert.status = AlertStatus.RESOLVED
+                    alert.resolved_at = datetime.now(timezone.utc)
+                    triggered_at = alert.triggered_at
+                    if triggered_at.tzinfo is None:
+                        triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+                    alert.response_time_seconds = int((alert.resolved_at - triggered_at).total_seconds())
+                    if responder:
+                        responder.is_available = True
+                        responder.current_alert_id = None
+                        responder.total_responses = (responder.total_responses or 0) + 1
+                    if alert_id in active_alerts:
+                        del active_alerts[alert_id]
 
-            session.commit()
+                session.commit()
 
-            socketio.emit('alert_status_changed', {
-                'alert_id': alert_id,
-                'status': status if status != 'resolved' else 'resolved',
-                'responder_id': responder_id
-            }, broadcast=True)
-
-        session.close()
+                socketio.emit('alert_status_changed', {
+                    'alert_id': alert_id,
+                    'status': status if status != 'resolved' else 'resolved',
+                    'responder_id': responder_id
+                }, broadcast=True)
+        finally:
+            session.close()
     except Exception as e:
         print(f'Error volunteer status: {e}')
 
@@ -1523,68 +1525,70 @@ def check_timers():
         try:
             time.sleep(10)  # Check every 10 seconds (faster for demo)
             session = get_session(engine)
-            now = datetime.now(timezone.utc)
+            try:
+                now = datetime.now(timezone.utc)
 
-            # Find timers expiring in 1 minute (send warning)
-            warning_threshold = now + timedelta(minutes=1)
-            warning_timers = session.query(CheckInTimer).filter(
-                CheckInTimer.is_active == True,
-                CheckInTimer.warning_sent == False,
-                CheckInTimer.expires_at <= warning_threshold
-            ).all()
+                # Find timers expiring in 1 minute (send warning)
+                warning_threshold = now + timedelta(minutes=1)
+                warning_timers = session.query(CheckInTimer).filter(
+                    CheckInTimer.is_active == True,
+                    CheckInTimer.warning_sent == False,
+                    CheckInTimer.expires_at <= warning_threshold
+                ).all()
 
-            for timer in warning_timers:
-                timer.warning_sent = True
-                # Notify user via socket
-                if timer.user_id in active_users:
-                    socketio.emit('timer_warning', {
-                        'expires_at': timer.expires_at.isoformat(),
-                        'seconds_left': int((timer.expires_at - now).total_seconds())
-                    }, room=f'user_{timer.user_id}')
+                for timer in warning_timers:
+                    timer.warning_sent = True
+                    # Notify user via socket
+                    if timer.user_id in active_users:
+                        socketio.emit('timer_warning', {
+                            'expires_at': timer.expires_at.isoformat(),
+                            'seconds_left': int((timer.expires_at - now).total_seconds())
+                        }, room=f'user_{timer.user_id}')
 
-            # Find expired timers
-            expired_timers = session.query(CheckInTimer).filter(
-                CheckInTimer.is_active == True,
-                CheckInTimer.triggered == False,
-                CheckInTimer.expires_at <= now
-            ).all()
+                # Find expired timers
+                expired_timers = session.query(CheckInTimer).filter(
+                    CheckInTimer.is_active == True,
+                    CheckInTimer.triggered == False,
+                    CheckInTimer.expires_at <= now
+                ).all()
 
-            for timer in expired_timers:
-                timer.triggered = True
-                timer.is_active = False
-                # Find user
-                user = session.query(User).filter_by(id=timer.user_id).first()
-                if user:
-                    # Auto-trigger SOS
-                    alert_id = str(uuid.uuid4())
-                    alert = Alert(
-                        alert_id=alert_id,
-                        user_id=user.id,
-                        status=AlertStatus.TRIGGERED,
-                        threat_level=ThreatLevel.HIGH,
-                        trigger_method='timer_expired',
-                        trigger_context=json.dumps({'reason': 'check_in_missed'}),
-                        ai_risk_score=0.75,
-                        ai_confidence=0.6,
-                        auto_purge_at=datetime.now(timezone.utc) + timedelta(hours=48)
-                    )
-                    session.add(alert)
-                    session.commit()
+                for timer in expired_timers:
+                    timer.triggered = True
+                    timer.is_active = False
+                    # Find user
+                    user = session.query(User).filter_by(id=timer.user_id).first()
+                    if user:
+                        # Auto-trigger SOS
+                        alert_id = str(uuid.uuid4())
+                        alert = Alert(
+                            alert_id=alert_id,
+                            user_id=user.id,
+                            status=AlertStatus.TRIGGERED,
+                            threat_level=ThreatLevel.HIGH,
+                            trigger_method='timer_expired',
+                            trigger_context=json.dumps({'reason': 'check_in_missed'}),
+                            ai_risk_score=0.75,
+                            ai_confidence=0.6,
+                            auto_purge_at=datetime.now(timezone.utc) + timedelta(hours=48)
+                        )
+                        session.add(alert)
+                        session.commit()
 
-                    alert_dict = alert.to_dict(include_sensitive=True)
-                    alert_dict['user'] = user.to_dict()
-                    active_alerts[alert_id] = alert_dict
-                    socketio.emit('alert_triggered', alert_dict)
+                        alert_dict = alert.to_dict(include_sensitive=True)
+                        alert_dict['user'] = user.to_dict()
+                        active_alerts[alert_id] = alert_dict
+                        socketio.emit('alert_triggered', alert_dict)
 
-                    # Notify user
-                    if user.id in active_users:
-                        socketio.emit('auto_sos_triggered', {
-                            'alert_id': alert_id,
-                            'reason': 'check_in_missed'
-                        }, room=f'user_{user.id}')
+                        # Notify user
+                        if user.id in active_users:
+                            socketio.emit('auto_sos_triggered', {
+                                'alert_id': alert_id,
+                                'reason': 'check_in_missed'
+                            }, room=f'user_{user.id}')
 
-            session.commit()
-            session.close()
+                session.commit()
+            finally:
+                session.close()
         except Exception as e:
             print(f'Timer check error: {e}')
 
@@ -1598,11 +1602,13 @@ def refresh_danger_zones_cache():
     while True:
         try:
             sess = get_session(engine)
-            zones = sess.query(DangerZone).filter_by(is_active=True).all()
-            zone_list = [{'latitude': z.latitude, 'longitude': z.longitude,
-                          'radius_meters': z.radius_meters, 'category': z.category} for z in zones]
-            threat_engine.update_danger_zones(zone_list)
-            sess.close()
+            try:
+                zones = sess.query(DangerZone).filter_by(is_active=True).all()
+                zone_list = [{'latitude': z.latitude, 'longitude': z.longitude,
+                              'radius_meters': z.radius_meters, 'category': z.category} for z in zones]
+                threat_engine.update_danger_zones(zone_list)
+            finally:
+                sess.close()
         except Exception:
             pass
         _time.sleep(60)
@@ -1618,10 +1624,10 @@ def upload_evidence():
     if request.method == 'OPTIONS':
         return '', 204
     try:
-        alert_id = request.form.get('alert_id') or (request.json or {}).get('alert_id')
+        alert_id = request.form.get('alert_id') or (request.get_json(silent=True) or {}).get('alert_id')
         # Accept file upload or base64
         evidence_file = request.files.get('audio')
-        evidence_b64 = (request.json or {}).get('audio_b64')
+        evidence_b64 = (request.get_json(silent=True) or {}).get('audio_b64')
 
         if not alert_id:
             return jsonify({'error': 'alert_id required'}), 400
@@ -1654,10 +1660,10 @@ def simulate_sos():
     """Simulate an SOS for demo purposes (no real user needed)"""
     if request.method == 'OPTIONS':
         return '', 204
+    session = get_session(engine)
     try:
-        data = request.json or {}
+        data = request.get_json(silent=True) or {}
         # Use a demo user or create one
-        session = get_session(engine)
         demo_user = session.query(User).filter_by(name='Demo User').first()
         if not demo_user:
             demo_user = User(
@@ -1793,10 +1799,11 @@ def simulate_sos():
             session.commit()
             socketio.emit('new_chat_message', d_msg.to_dict())
 
-        session.close()
         return jsonify({'message': 'Demo SOS simulated', 'alert': alert_dict, 'area': area}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
 
 
 @socketio.on('trigger_sos')

@@ -118,7 +118,7 @@ class ThreatAssessmentEngine:
         zones = getattr(self, '_danger_zones', [])
         for zone in zones:
             try:
-                dist = self._calculate_distance(
+                dist = calculate_distance(
                     latitude, longitude,
                     zone.get('latitude', zone.latitude if hasattr(zone, 'latitude') else 0),
                     zone.get('longitude', zone.longitude if hasattr(zone, 'longitude') else 0)

@@ -184,13 +184,19 @@ class LocationUpdate(Base):
     alert = relationship("Alert", back_populates="location_updates")
     
     def to_dict(self):
+        def format_dt(dt):
+            if not dt:
+                return None
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
         return {
             'latitude': self.latitude,
             'longitude': self.longitude,
             'accuracy': self.accuracy,
             'speed': self.speed,
             'heading': self.heading,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+            'timestamp': format_dt(self.timestamp)
         }
 
 
@@ -257,12 +263,19 @@ class MeshNode(Base):
     signal_strength = Column(Float)
     
     def to_dict(self):
+        def format_dt(dt):
+            if not dt:
+                return None
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
         return {
             'node_id': self.node_id,
             'node_type': self.node_type,
             'latitude': self.latitude,
             'longitude': self.longitude,
             'is_active': self.is_active,
+            'last_seen': format_dt(self.last_seen),
             'messages_relayed': self.messages_relayed
         }
 
@@ -285,11 +298,17 @@ class AuditLog(Base):
     details = Column(Text)  # JSON with additional info
     
     def to_dict(self):
+        def format_dt(dt):
+            if not dt:
+                return None
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
         return {
             'action': self.action,
             'actor': self.actor,
             'actor_role': self.actor_role,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+            'timestamp': format_dt(self.timestamp)
         }
 
 
@@ -310,6 +329,12 @@ class DangerZone(Base):
     expires_at = Column(DateTime)
 
     def to_dict(self):
+        def format_dt(dt):
+            if not dt:
+                return None
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
         return {
             'zone_id': self.zone_id,
             'latitude': self.latitude,
@@ -319,7 +344,7 @@ class DangerZone(Base):
             'description': self.description,
             'report_count': self.report_count,
             'is_active': self.is_active,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': format_dt(self.created_at)
         }
 
 
@@ -336,13 +361,19 @@ class ChatMessage(Base):
     is_quick_reply = Column(Boolean, default=False)
 
     def to_dict(self):
+        def format_dt(dt):
+            if not dt:
+                return None
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
         return {
             'id': self.id,
             'alert_id': self.alert_id,
             'sender_type': self.sender_type,
             'sender_name': self.sender_name,
             'message': self.message,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'timestamp': format_dt(self.timestamp),
             'is_quick_reply': self.is_quick_reply
         }
 
@@ -380,7 +411,11 @@ class CheckInTimer(Base):
 # Database initialization
 def init_db(db_path='womensafety.db'):
     """Initialize database"""
-    engine = create_engine(f'sqlite:///{db_path}')
+    engine = create_engine(
+        f'sqlite:///{db_path}',
+        connect_args={'check_same_thread': False},
+        pool_pre_ping=True
+    )
     Base.metadata.create_all(engine)
     return engine
 
