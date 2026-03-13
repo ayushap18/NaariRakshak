@@ -1788,6 +1788,7 @@
      SCRIPTS
 ════════════════════════════════════════════════════════════════════════ -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCKr97Vp-o-QB5PQU6HS6Vz9Bl08M05uzM" async defer></script>
 <script>
 /* ====================================================================
    STATE
@@ -1800,6 +1801,8 @@ let currentLat     = null;
 let currentLon     = null;
 let socket         = null;
 let geoWatchId     = null;
+let mobileMap      = null;
+let mobileMarker   = null;
 
 // Check-in timer state
 let checkinEndTime   = null;
@@ -2152,6 +2155,49 @@ function switchToAlertView() {
   document.getElementById('help-arrived-banner').style.display = 'none';
   document.getElementById('alert-coords-display').textContent =
     currentLat ? `${currentLat.toFixed(5)}, ${currentLon.toFixed(5)}` : 'Acquiring GPS…';
+  // Initialize Google Map in alert view
+  if (currentLat && currentLon && typeof google !== 'undefined') {
+    const mapEl = document.getElementById('alert-map');
+    document.getElementById('map-placeholder').style.display = 'none';
+    mapEl.style.display = 'block';
+    if (!mobileMap) {
+      mobileMap = new google.maps.Map(mapEl, {
+        center: { lat: currentLat, lng: currentLon },
+        zoom: 15,
+        disableDefaultUI: true,
+        zoomControl: true,
+        styles: [
+          { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
+          { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+          { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
+          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
+        ]
+      });
+      mobileMarker = new google.maps.Marker({
+        position: { lat: currentLat, lng: currentLon },
+        map: mobileMap,
+        icon: {
+          url: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="10" fill="#E53935" stroke="white" stroke-width="3"><animate attributeName="r" values="8;12;8" dur="1.5s" repeatCount="indefinite"/></circle></svg>'),
+          scaledSize: new google.maps.Size(28, 28),
+          anchor: new google.maps.Point(14, 14)
+        },
+        title: 'Your Location'
+      });
+      new google.maps.Circle({
+        center: { lat: currentLat, lng: currentLon },
+        radius: 200,
+        strokeColor: '#E53935',
+        strokeWeight: 1,
+        fillColor: '#E53935',
+        fillOpacity: 0.1,
+        map: mobileMap
+      });
+    } else {
+      const pos = { lat: currentLat, lng: currentLon };
+      mobileMap.setCenter(pos);
+      mobileMarker.setPosition(pos);
+    }
+  }
 }
 
 function returnHome(showSafe) {

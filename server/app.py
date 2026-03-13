@@ -29,6 +29,13 @@ from gemini_ai import (
     analyse_chat_for_escalation, generate_incident_summary,
     get_location_name
 )
+from cctv_ai import (
+    analyse_frame as cctv_analyse_frame,
+    analyse_video as cctv_analyse_video,
+    get_model_status as cctv_model_status,
+    is_model_loaded as cctv_model_loaded,
+    _load_model as cctv_load_model
+)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -79,6 +86,11 @@ def volunteer_app():
 @app.route('/dashboard')
 def dashboard_redirect():
     return render_template('dashboard.html')
+
+@app.route('/cctv')
+def cctv_dashboard():
+    """Serve CCTV AI monitoring dashboard"""
+    return render_template('cctv.html')
 
 
 @app.route('/api/health', methods=['GET'])
@@ -824,6 +836,88 @@ def geocode_location():
         return jsonify({'error': 'lat and lon required'}), 400
     name = get_location_name(lat, lon)
     return jsonify({'location_name': name, 'lat': lat, 'lon': lon})
+
+
+# ============ CCTV AI ENDPOINTS ============
+
+@app.route('/api/cctv/status', methods=['GET'])
+def cctv_status():
+    """Get CCTV AI model status"""
+    return jsonify(cctv_model_status())
+
+
+@app.route('/api/cctv/load-model', methods=['POST'])
+def cctv_load():
+    """Preload the CCTV AI model"""
+    import threading
+    def load_bg():
+        cctv_load_model()
+    threading.Thread(target=load_bg, daemon=True).start()
+    return jsonify({'status': 'loading', 'message': 'Model loading in background...'})
+
+
+@app.route('/api/cctv/analyse-frame', methods=['POST'])
+def cctv_frame():
+    """Analyse a single image frame for violence"""
+    if 'frame' not in request.files:
+        # Try base64 in JSON body
+        data = request.get_json(silent=True) or {}
+        b64 = data.get('frame_b64', '')
+        if b64:
+            import base64
+            image_bytes = base64.b64decode(b64)
+        else:
+            return jsonify({'error': 'No frame provided'}), 400
+    else:
+        image_bytes = request.files['frame'].read()
+
+    result = cctv_analyse_frame(image_bytes)
+
+    # If violence detected, auto-create alert and notify dashboard
+    if result.get('violence') and result.get('confidence', 0) >= 0.75:
+        socketio.emit('cctv_violence_detected', {
+            'confidence': result['confidence'],
+            'label': result['label'],
+            'detected_at': datetime.now(timezone.utc).isoformat(),
+            'source': 'cctv_frame'
+        })
+
+    return jsonify(result)
+
+
+@app.route('/api/cctv/analyse-video', methods=['POST'])
+def cctv_video():
+    """Analyse uploaded video for violence"""
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+
+    video_file = request.files['video']
+    os.makedirs('evidence', exist_ok=True)
+    temp_path = os.path.join('evidence', f'upload_{uuid.uuid4().hex[:8]}.mp4')
+    video_file.save(temp_path)
+
+    def progress_cb(data):
+        socketio.emit('cctv_analysis_progress', data)
+
+    result = cctv_analyse_video(temp_path, progress_callback=progress_cb)
+
+    # Clean up temp file (keep clip if violence found)
+    if os.path.exists(temp_path) and temp_path != result.get('clip_path'):
+        os.remove(temp_path)
+
+    # Notify dashboard of all detections
+    if result.get('violence_detected'):
+        for det in result.get('detections', []):
+            socketio.emit('cctv_violence_detected', {
+                'confidence': det['confidence'],
+                'label': det['label'],
+                'timestamp_sec': det['timestamp_sec'],
+                'snapshot_b64': det.get('snapshot_b64'),
+                'detected_at': det['detected_at'],
+                'source': 'cctv_video'
+            })
+
+    return jsonify(result)
 
 
 @app.route('/api/stats', methods=['GET'])

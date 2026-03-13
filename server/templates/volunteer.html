@@ -1787,10 +1787,11 @@
     </div>
 
     <div id="tab-map" style="flex:1; display:none; flex-direction:column; overflow:hidden;">
-      <div class="map-stub">
+      <div id="volunteer-map" style="flex:1; min-height:300px;"></div>
+      <div class="map-stub" id="map-stub-msg">
         <div class="map-stub-icon">🗺️</div>
         <div class="fw-700" style="font-size:16px; color:var(--text);">Coverage Map</div>
-        <div style="max-width:240px;">Accept an alert to open navigation to the victim's location.</div>
+        <div style="max-width:240px;">Accept an alert to see the victim's location on map.</div>
         <div class="fs-13 c-text3" id="map-coords-display" style="font-family:monospace; margin-top:6px;">Waiting for GPS…</div>
       </div>
     </div>
@@ -1981,6 +1982,7 @@
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"
         crossorigin="anonymous"
         onerror="loadSocketIOFallback()"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCKr97Vp-o-QB5PQU6HS6Vz9Bl08M05uzM" async defer></script>
 <script>
 function loadSocketIOFallback() {
   var s = document.createElement('script');
@@ -2521,6 +2523,8 @@ function showActiveAlert(a) {
     document.getElementById('navigate-btn').href     = googleUrl;
     document.getElementById('nav-btn').href          = googleUrl;
     document.getElementById('navigate-btn-ola').href = olaUrl;
+    // Show victim on volunteer map tab
+    initVolunteerMap(a.latitude, a.longitude, a.threat_level || 'high');
   } else {
     ['navigate-btn','nav-btn','navigate-btn-ola'].forEach(id => {
       document.getElementById(id).removeAttribute('href');
@@ -2532,6 +2536,43 @@ function showActiveAlert(a) {
   currentStatus = 'en_route';
 
   showView('view-active');
+}
+
+let volunteerMap = null, volunteerMarker = null;
+function initVolunteerMap(lat, lng, threat) {
+  if (typeof google === 'undefined') return;
+  const mapEl = document.getElementById('volunteer-map');
+  const stub = document.getElementById('map-stub-msg');
+  if (!mapEl) return;
+  stub.style.display = 'none';
+  mapEl.style.display = 'block';
+  const pos = { lat, lng };
+  if (!volunteerMap) {
+    volunteerMap = new google.maps.Map(mapEl, {
+      center: pos, zoom: 15,
+      disableDefaultUI: true, zoomControl: true,
+      styles: [
+        { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
+      ]
+    });
+  } else {
+    volunteerMap.setCenter(pos);
+  }
+  if (volunteerMarker) volunteerMarker.setMap(null);
+  const color = threat === 'critical' ? '#D32F2F' : threat === 'high' ? '#E53935' : '#FF6F00';
+  volunteerMarker = new google.maps.Marker({
+    position: pos, map: volunteerMap,
+    icon: { url: 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="10" fill="${color}" stroke="white" stroke-width="3"><animate attributeName="r" values="8;12;8" dur="1.5s" repeatCount="indefinite"/></circle></svg>`),
+      scaledSize: new google.maps.Size(28, 28), anchor: new google.maps.Point(14, 14) },
+    title: 'Victim Location'
+  });
+  new google.maps.Circle({
+    center: pos, radius: 200, strokeColor: color, strokeWeight: 1,
+    fillColor: color, fillOpacity: 0.1, map: volunteerMap
+  });
 }
 
 function updateActiveDistances() {

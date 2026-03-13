@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- External CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <style>
     /* ─────────────────────────────────────────
@@ -780,7 +779,7 @@
     .empty-state .empty-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
 
     /* ─────────────────────────────────────────
-       LEAFLET CUSTOM MARKER
+       MAP MARKER STYLES
     ───────────────────────────────────────── */
     .alert-marker-pulse {
       width: 18px; height: 18px;
@@ -808,17 +807,10 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     }
 
-    /* Leaflet popup */
-    .leaflet-popup-content-wrapper {
-      background: var(--card);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-family: var(--font);
-      font-size: 12px;
-    }
-    .leaflet-popup-tip { background: var(--card); }
-    .leaflet-popup-close-button { color: var(--muted) !important; }
+    /* Google Maps InfoWindow */
+    .gm-style-iw { background: var(--card) !important; color: var(--text); }
+    .gm-style-iw-d { overflow: auto !important; }
+    .gm-ui-hover-effect > span { background-color: var(--muted) !important; }
 
     .popup-row { margin: 2px 0; }
     .popup-row b { color: #CE93D8; }
@@ -887,6 +879,7 @@
       <button class="hdr-btn active" id="btn-sound" onclick="toggleSound()">🔊 Sound ON</button>
       <button class="hdr-btn" id="btn-simulate" onclick="simulateSOS()" title="Simulate SOS for demo">⚡ Simulate SOS</button>
       <button class="hdr-btn" id="btn-reset" onclick="resetDemo()">↺ Reset Demo</button>
+      <a class="hdr-btn" href="/cctv" style="text-decoration:none;">📹 CCTV Mode</a>
     </div>
   </header>
 
@@ -1023,8 +1016,7 @@
      SCRIPTS
 ═══════════════════════════════════════ -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCKr97Vp-o-QB5PQU6HS6Vz9Bl08M05uzM&libraries=visualization&callback=initMap" async defer></script>
 
 <script>
 /* ─────────────────────────────────────────────────
@@ -1033,10 +1025,10 @@
 const alerts     = {};   // alert_id → alertObj
 const responders = {};   // responder_id → responderObj
 
-let map, heatLayer;
-const alertMarkers     = {};   // alert_id → L.Marker
-const responderMarkers = {};   // responder_id → L.Marker
-const dangerCircles    = [];   // L.Circle[]
+let map, heatLayer, infoWindow;
+const alertMarkers     = {};   // alert_id → google.maps.Marker
+const responderMarkers = {};   // responder_id → google.maps.Marker
+const dangerCircles    = [];   // google.maps.Circle[]
 
 const layerState = { alerts: true, responders: true, danger: true, heatmap: false };
 let soundEnabled  = true;
@@ -1058,10 +1050,12 @@ const socket = io();
 
 socket.on('connect', () => {
   document.getElementById('conn-dot').className = 'connected';
-  loadAlerts();
-  loadResponders();
-  loadDangerZones();
-  loadStats();
+  if (map) {
+    loadAlerts();
+    loadResponders();
+    loadDangerZones();
+    loadStats();
+  }
   loadMode();
 });
 
@@ -1153,15 +1147,37 @@ socket.on('demo_reset', () => {
    MAP INIT
 ───────────────────────────────────────────────── */
 function initMap() {
-  map = L.map('map', { zoomControl: false }).setView([28.6139, 77.2090], 12);
-
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://carto.com/">CartoDB</a>',
-    subdomains: 'abcd',
-    maxZoom: 19
-  }).addTo(map);
-
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  const darkStyle = [
+    { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#1a3646' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#255763' }] },
+    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#98a5be' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#283d6a' }] },
+    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3948' }] },
+    { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#4b6878' }] },
+  ];
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 28.6139, lng: 77.2090 },
+    zoom: 12,
+    styles: darkStyle,
+    disableDefaultUI: true,
+    zoomControl: true,
+    zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false
+  });
+  infoWindow = new google.maps.InfoWindow();
+  
+  // Now load data
+  loadAlerts();
+  loadResponders();
+  loadDangerZones();
+  loadStats();
+  loadMode();
 }
 
 /* ─────────────────────────────────────────────────
@@ -1175,30 +1191,34 @@ function makeAlertIcon(threatLevel) {
     low:      '#FDD835'
   };
   const c = colors[threatLevel] || '#E53935';
-  const anim = (threatLevel === 'critical') ? 'animation:map-pulse 1.6s infinite;' : '';
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);${anim}"></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9]
-  });
+  const pulse = (threatLevel === 'critical') ? 'animation:map-pulse 1.6s infinite;' : '';
+  return {
+    url: 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="9" fill="${c}" stroke="white" stroke-width="2"/></svg>`),
+    scaledSize: new google.maps.Size(22, 22),
+    anchor: new google.maps.Point(11, 11)
+  };
 }
 
 function addOrUpdateAlertMarker(alert) {
   if (!map || !alert.latitude || !alert.longitude) return;
   if (!layerState.alerts) return;
-
+  const pos = { lat: alert.latitude, lng: alert.longitude };
   if (alertMarkers[alert.alert_id]) {
-    alertMarkers[alert.alert_id].setLatLng([alert.latitude, alert.longitude]);
+    alertMarkers[alert.alert_id].setPosition(pos);
     alertMarkers[alert.alert_id].setIcon(makeAlertIcon(alert.threat_level));
   } else {
-    const marker = L.marker([alert.latitude, alert.longitude], {
-      icon: makeAlertIcon(alert.threat_level)
-    }).addTo(map);
-    marker.bindPopup(buildAlertPopup(alert));
+    const marker = new google.maps.Marker({
+      position: pos,
+      map: map,
+      icon: makeAlertIcon(alert.threat_level),
+      title: `Alert #${(alert.alert_id||'').substring(0,8)}`
+    });
+    marker.addListener('click', () => {
+      infoWindow.setContent(buildAlertPopup(alert));
+      infoWindow.open(map, marker);
+    });
     alertMarkers[alert.alert_id] = marker;
   }
-  alertMarkers[alert.alert_id].setPopupContent(buildAlertPopup(alert));
 }
 
 function buildAlertPopup(alert) {
@@ -1218,8 +1238,8 @@ function buildAlertPopup(alert) {
 }
 
 function removeAlertMarker(alertId) {
-  if (alertMarkers[alertId] && map) {
-    map.removeLayer(alertMarkers[alertId]);
+  if (alertMarkers[alertId]) {
+    alertMarkers[alertId].setMap(null);
     delete alertMarkers[alertId];
   }
 }
@@ -1234,33 +1254,38 @@ function makeResponderIcon(type) {
     volunteer: '#2E7D32'
   };
   const c = colors[type] || '#555';
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:14px;height:14px;border-radius:50%;background:${c};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7]
-  });
+  return {
+    url: 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="6" fill="${c}" stroke="white" stroke-width="2"/></svg>`),
+    scaledSize: new google.maps.Size(16, 16),
+    anchor: new google.maps.Point(8, 8)
+  };
 }
 
 function refreshResponderMarkers() {
   if (!map) return;
-  Object.values(responderMarkers).forEach(m => map.removeLayer(m));
+  Object.values(responderMarkers).forEach(m => m.setMap(null));
   Object.keys(responderMarkers).forEach(k => delete responderMarkers[k]);
-
   if (!layerState.responders) return;
-
   Object.values(responders).forEach(r => {
     if (!r.latitude || !r.longitude) return;
-    const m = L.marker([r.latitude, r.longitude], { icon: makeResponderIcon(r.type) }).addTo(map);
-    m.bindPopup(`
-      <div style="font-family:-apple-system,system-ui,sans-serif;font-size:12px;min-width:140px;">
-        <div style="font-weight:700;color:#CE93D8;margin-bottom:4px;">${r.name}</div>
-        <div><b>Type:</b> ${(r.type||'').toUpperCase()}</div>
-        <div><b>Status:</b> ${r.is_available ? 'Available' : 'Busy'}</div>
-        ${r.rating ? `<div><b>Rating:</b> ${r.rating} ⭐</div>` : ''}
-      </div>
-    `);
-    responderMarkers[r.responder_id] = m;
+    const marker = new google.maps.Marker({
+      position: { lat: r.latitude, lng: r.longitude },
+      map: map,
+      icon: makeResponderIcon(r.type),
+      title: r.name
+    });
+    marker.addListener('click', () => {
+      infoWindow.setContent(`
+        <div style="font-family:-apple-system,system-ui,sans-serif;font-size:12px;min-width:140px;">
+          <div style="font-weight:700;color:#7C4DFF;margin-bottom:4px;">${r.name}</div>
+          <div><b>Type:</b> ${(r.type||'').toUpperCase()}</div>
+          <div><b>Status:</b> ${r.is_available ? 'Available' : 'Busy'}</div>
+          ${r.rating ? `<div><b>Rating:</b> ${r.rating} ⭐</div>` : ''}
+        </div>
+      `);
+      infoWindow.open(map, marker);
+    });
+    responderMarkers[r.responder_id] = marker;
   });
 }
 
@@ -1269,24 +1294,28 @@ function refreshResponderMarkers() {
 ───────────────────────────────────────────────── */
 function addDangerZone(zone) {
   if (!map || !zone.latitude || !zone.longitude) return;
-  const circle = L.circle([zone.latitude, zone.longitude], {
+  const circle = new google.maps.Circle({
+    center: { lat: zone.latitude, lng: zone.longitude },
     radius: zone.radius_meters || 150,
-    color: '#FF6F00',
+    strokeColor: '#FF6F00',
+    strokeWeight: 1.5,
     fillColor: '#FF6F00',
     fillOpacity: 0.15,
-    weight: 1.5
-  }).addTo(map);
-  circle.bindPopup(`
-    <div style="font-family:-apple-system,system-ui,sans-serif;font-size:12px;">
-      <div style="font-weight:700;color:#FFCC80;margin-bottom:4px;">⚠️ Danger Zone</div>
-      <div><b>Category:</b> ${zone.category || 'N/A'}</div>
-      ${zone.description ? `<div><b>Note:</b> ${zone.description}</div>` : ''}
-      <div><b>Reports:</b> ${zone.report_count || 1}</div>
-    </div>
-  `);
+    map: layerState.danger ? map : null
+  });
+  circle.addListener('click', () => {
+    infoWindow.setContent(`
+      <div style="font-family:-apple-system,system-ui,sans-serif;font-size:12px;">
+        <div style="font-weight:700;color:#FFCC80;margin-bottom:4px;">⚠️ Danger Zone</div>
+        <div><b>Category:</b> ${zone.category || 'N/A'}</div>
+        ${zone.description ? `<div><b>Note:</b> ${zone.description}</div>` : ''}
+        <div><b>Reports:</b> ${zone.report_count || 1}</div>
+      </div>
+    `);
+    infoWindow.setPosition({ lat: zone.latitude, lng: zone.longitude });
+    infoWindow.open(map);
+  });
   dangerCircles.push(circle);
-
-  if (!layerState.danger) circle.remove();
 }
 
 /* ─────────────────────────────────────────────────
@@ -1299,17 +1328,16 @@ function toggleLayer(layerName) {
   else btn.classList.remove('on');
 
   if (layerName === 'alerts') {
-    Object.values(alertMarkers).forEach(m => layerState.alerts ? map.addLayer(m) : map.removeLayer(m));
+    Object.values(alertMarkers).forEach(m => m.setMap(layerState.alerts ? map : null));
   }
   if (layerName === 'responders') {
     refreshResponderMarkers();
   }
   if (layerName === 'danger') {
-    dangerCircles.forEach(c => layerState.danger ? map.addLayer(c) : map.removeLayer(c));
+    dangerCircles.forEach(c => c.setMap(layerState.danger ? map : null));
   }
   if (layerName === 'heatmap') {
-    if (layerState.heatmap && heatLayer) map.addLayer(heatLayer);
-    else if (!layerState.heatmap && heatLayer) map.removeLayer(heatLayer);
+    if (heatLayer) heatLayer.setMap(layerState.heatmap ? map : null);
   }
 }
 
@@ -1368,9 +1396,14 @@ async function loadDangerZones() {
     document.getElementById('stat-zones').textContent = (d.zones || []).length;
 
     // Build heatmap layer
-    if (typeof L.heatLayer === 'function' && heatPoints.length) {
-      heatLayer = L.heatLayer(heatPoints, { radius: 35, blur: 20, maxZoom: 16 });
-      if (layerState.heatmap) heatLayer.addTo(map);
+    if (heatPoints.length && google.maps.visualization) {
+      const mvcs = heatPoints.map(p => ({ location: new google.maps.LatLng(p[0], p[1]), weight: p[2] }));
+      heatLayer = new google.maps.visualization.HeatmapLayer({
+        data: mvcs,
+        radius: 30,
+        opacity: 0.6,
+        map: layerState.heatmap ? map : null
+      });
     }
   } catch(e) { console.error('loadDangerZones', e); }
 }
@@ -1991,8 +2024,6 @@ function escapeHtml(str) {
 /* ─────────────────────────────────────────────────
    BOOT
 ───────────────────────────────────────────────── */
-initMap();
-
 // Periodic stats refresh
 setInterval(loadStats, 30000);
 // Periodic alert refresh
