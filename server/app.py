@@ -849,6 +849,8 @@ def cctv_status():
 @app.route('/api/cctv/load-model', methods=['POST'])
 def cctv_load():
     """Preload the CCTV AI model"""
+    if cctv_model_loaded():
+        return jsonify({'status': 'loaded', 'message': 'Model already loaded'})
     import threading
     def load_bg():
         cctv_load_model()

@@ -23,6 +23,8 @@ fi
 
 # Start server
 export FLASK_CONFIG=production
+export KMP_DUPLICATE_LIB_OK=TRUE
+export HF_HUB_DISABLE_PROGRESS_BARS=1
 nohup python3 server/app.py > server.log 2>&1 &
 echo $! > server.pid
 
