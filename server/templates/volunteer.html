@@ -2122,6 +2122,38 @@ function playBeep() {
   } catch(e) { /* ignore audio errors */ }
 }
 
+// ─── Audio: Urgent Alarm (3 rapid high-pitched beeps) ─────
+function playUrgentAlarm() {
+  try {
+    if (!beepCtx) beepCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = beepCtx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const osc  = beepCtx.createOscillator();
+      const gain = beepCtx.createGain();
+      osc.connect(gain);
+      gain.connect(beepCtx.destination);
+      osc.frequency.setValueAtTime(1200, now + i * 0.25);
+      gain.gain.setValueAtTime(0.5, now + i * 0.25);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.25 + 0.2);
+      osc.start(now + i * 0.25);
+      osc.stop(now + i * 0.25 + 0.2);
+    }
+  } catch(e) { /* ignore audio errors */ }
+}
+
+// ─── Browser Push Notification ───────────────────────────────
+function sendBrowserNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const n = new Notification(title, {
+      body: body,
+      icon: '/static/favicon.ico',
+      tag: 'nr-volunteer-alert',
+      requireInteraction: true
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  }
+}
+
 // ─── HTML Escape ──────────────────────────────────────────
 function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2206,6 +2238,10 @@ function connectSocket() {
     // Re-announce as volunteer
     if (volunteer.responder_id) {
       socket.emit('user_register', { user_id: volunteer.responder_id });
+      // Re-join volunteers room if on shift
+      if (shiftStartTime) {
+        socket.emit('volunteer_go_online', { responder_id: volunteer.responder_id });
+      }
     }
     // Hide loading overlay on first connect
     document.getElementById('loading-overlay').classList.add('hidden');
@@ -2221,6 +2257,21 @@ function connectSocket() {
     playBeep();
     if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
     toast('New emergency alert nearby!', 'alert', '🚨');
+  });
+
+  // ── Targeted Volunteer Alert (no auto-dispatch, you must accept) ──
+  socket.on('volunteer_alert', data => {
+    alertsMap[data.alert_id] = data;
+    renderFeed();
+    playUrgentAlarm();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+    toast('URGENT: Someone needs help! Accept to respond.', 'alert', '🆘');
+    const loc = data.location_name || 'unknown location';
+    const threat = (data.threat_level || 'unknown').toUpperCase();
+    sendBrowserNotification(
+      '🆘 NaariRakshak — Emergency Alert',
+      `${threat} threat near ${loc}. Open app to accept and respond.`
+    );
   });
 
   // ── Alert Cancelled ──────────────────────────────────
@@ -2345,6 +2396,12 @@ document.getElementById('start-shift-btn').addEventListener('click', () => {
       status:       'available',
       alert_id:     null
     });
+    // Tell server we're online so auto-dispatch is skipped
+    socket.emit('volunteer_go_online', { responder_id: volunteer.responder_id });
+  }
+  // Request browser notification permission
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
   }
   shiftStartTime = Date.now();
   setInterval(updateShiftTime, 60000);
@@ -2749,6 +2806,7 @@ function endShift() {
       status:       'off_duty',
       alert_id:     null
     });
+    socket.emit('volunteer_go_offline', { responder_id: volunteer.responder_id });
   }
   shiftStartTime = null;
   toast('Shift ended. Stay safe!', 'success', '👋');
@@ -2757,7 +2815,11 @@ function endShift() {
 
 function logout() {
   stopGPS();
-  if (socket) { socket.disconnect(); socket = null; }
+  if (socket && socket.connected) {
+    socket.emit('volunteer_go_offline', { responder_id: volunteer.responder_id });
+    socket.disconnect();
+  }
+  socket = null;
   localStorage.removeItem('nr_volunteer');
   volunteer = { id: null, responder_id: null, name: '', phone: '', type: '', activeAlertId: null, handledCount: 0 };
   alertsMap = {};

@@ -1,4 +1,5 @@
 # NaariRakshak — Design System & UI Guidelines
+> **Team CodeCatalysts** | HackForImpact 2026 — Track 2: Social Impact
 
 ---
 
@@ -25,7 +26,16 @@
 
 ## Platform-Specific Design
 
-### 1. User Mobile App
+NaariRakshak consists of **4 platforms**, each with distinct design goals:
+
+| # | Platform | Route | Template |
+|---|----------|-------|----------|
+| 1 | User Mobile App | `/app` | `mobile.html` |
+| 2 | Command Center Dashboard | `/dashboard` | `dashboard.html` |
+| 3 | Volunteer/Responder App | `/volunteer` | `volunteer.html` |
+| 4 | CCTV AI Monitoring | `/cctv` | `cctv.html` |
+
+### 1. User Mobile App (Route: `/app`)
 
 **Design Principles:**
 - **Panic-proof:** In an emergency, users have reduced fine motor control
@@ -34,7 +44,7 @@
 - **High contrast:** 7:1 contrast ratio minimum (AAA)
 - **One-thumb reachable:** All critical actions in bottom half of screen
 
-**Screen Flow:**
+**Screen Flow (Route: `/app`):**
 ```
 Splash → Language Select → Onboarding (name + phone) → Home
                                                           ↓
@@ -105,7 +115,7 @@ Splash → Language Select → Onboarding (name + phone) → Home
 
 ---
 
-### 2. Command Center Dashboard
+### 2. Command Center Dashboard (Route: `/dashboard`)
 
 **Design Principles:**
 - **Information density:** Operators need as much data as possible at a glance
@@ -146,7 +156,7 @@ Splash → Language Select → Onboarding (name + phone) → Home
 
 ---
 
-### 3. Volunteer App
+### 3. Volunteer App (Route: `/volunteer`)
 
 **Design Principles:**
 - **Action-first:** Volunteers need to accept/decline fast
@@ -209,6 +219,79 @@ Login (phone + OTP) → Shift Check-In → Alert Feed
 │  [I'm nearby] [Be calm] [Type...]       │
 └─────────────────────────────────────────┘
 ```
+
+---
+
+### 4. CCTV AI Monitoring Dashboard (Route: `/cctv`)
+
+**Design Principles:**
+- **Dark theme default:** Consistent with command center; reduces eye strain during continuous monitoring
+- **Video-first:** Primary focus is the live camera feed — large, centered, high-resolution
+- **Status at a glance:** Detection state (Safe / Warning / Violence) communicated via color-coded indicators
+- **Non-intrusive logging:** Event log scrolls automatically but does not obstruct the video feed
+- **Evidence-ready:** Recording controls always accessible for manual capture
+
+**Color Scheme:**
+| Element | Color | Hex |
+|---------|-------|-----|
+| Background | Near Black | `#0a0a0a` |
+| Card/Panel | Dark Gray | `#1a1a2e` |
+| Safe status | Green | `#00ff88` |
+| Warning status | Amber/Orange | `#ff6f00` |
+| Violence detected | Red (pulsing) | `#ff0000` |
+| Text primary | White | `#ffffff` |
+| Text secondary | Muted gray | `#888888` |
+
+**Layout:**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  CCTV AI Monitoring — NaariRakshak              [REC ●] [Settings]  │
+├──────────────────────────────────────────┬───────────────────────────┤
+│                                          │  DETECTION STATUS         │
+│                                          │  ────────────────         │
+│          LIVE VIDEO FEED                 │  ● SAFE                   │
+│          (Webcam / CCTV Stream)          │  Confidence: 92%          │
+│                                          │                           │
+│          ┌────────────────────┐          │  PIPELINE                 │
+│          │   AI Analysis      │          │  ────────────────         │
+│          │   Overlay          │          │  YOLOv8: 2 persons        │
+│          │   (bounding boxes, │          │  Motion: Low (0.12)       │
+│          │    detection info) │          │  CLIP: Safe scene         │
+│          └────────────────────┘          │                           │
+│                                          │  ──────────────────       │
+│  [▶ Start Camera] [⏹ Stop] [● Record]   │  CONTROLS                 │
+│                                          │  Analysis: Every 3s       │
+├──────────────────────────────────────────┤  Threshold: 0.60          │
+│  EVENT LOG                               │                           │
+│  ──────────────────────                  │                           │
+│  14:32:07 — SAFE (0.92)                  │  EVIDENCE                 │
+│  14:32:10 — SAFE (0.88)                  │  ────────────────         │
+│  14:32:13 — WARNING (0.61)               │  evidence_a7ce.webm       │
+│  14:32:16 — VIOLENCE (0.78) ⚠️           │  evidence_7d69.webm       │
+│  14:32:19 — SAFE (0.85)                  │  [View All Evidence]      │
+│                                          │                           │
+└──────────────────────────────────────────┴───────────────────────────┘
+```
+
+**Screen Flow:**
+```
+Load /cctv → Camera Permission → Live Feed Active
+                                       ↓
+                              AI Pipeline Running
+                              (YOLOv8 → Optical Flow → CLIP)
+                                       ↓
+                              Detection Results
+                              ├─ Safe → Green indicator, log entry
+                              ├─ Warning → Amber indicator, log entry
+                              └─ Violence → Red pulse, log entry, auto-record
+```
+
+**Key UI Elements:**
+- **Video feed area:** 640x480 minimum, scales to available width, dark border (`#333`)
+- **Detection status badge:** Large pill-shaped indicator, color changes with state, includes confidence percentage
+- **Event log:** Scrollable panel, newest entries at top, timestamps in `HH:MM:SS` format, color-coded by severity
+- **Recording indicator:** Red dot with "REC" label, pulses when active
+- **Pipeline details:** Show each stage (YOLO person count, optical flow intensity, CLIP classification) for transparency
 
 ---
 
@@ -284,4 +367,4 @@ Login (phone + OTP) → Shift Check-In → Alert Feed
 
 ---
 
-*Design system maintained by: NaariRakshak HackForImpact Team*
+*Design system maintained by: Team CodeCatalysts — NaariRakshak | HackForImpact 2026*

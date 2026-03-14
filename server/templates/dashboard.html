@@ -1050,12 +1050,10 @@ const socket = io();
 
 socket.on('connect', () => {
   document.getElementById('conn-dot').className = 'connected';
-  if (map) {
-    loadAlerts();
-    loadResponders();
-    loadDangerZones();
-    loadStats();
-  }
+  loadAlerts();
+  loadResponders();
+  loadDangerZones();
+  loadStats();
   loadMode();
 });
 
@@ -1631,8 +1629,11 @@ function focusAlert(alertId) {
 
   // Pan map
   if (map && a.latitude && a.longitude) {
-    map.flyTo([a.latitude, a.longitude], 15, { duration: 0.8 });
-    if (alertMarkers[alertId]) alertMarkers[alertId].openPopup();
+    map.panTo({ lat: a.latitude, lng: a.longitude });
+    map.setZoom(15);
+    if (alertMarkers[alertId]) {
+      google.maps.event.trigger(alertMarkers[alertId], 'click');
+    }
   }
 }
 

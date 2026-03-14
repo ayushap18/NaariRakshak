@@ -1,5 +1,5 @@
 # NaariRakshak — Feature Ideas & Backlog
-> Living document for the HackForImpact 2026 sprint and beyond
+> Living document for Team CodeCatalysts | HackForImpact 2026 | Track 2: Social Impact
 
 ---
 
@@ -19,14 +19,23 @@
 - [x] Mesh network offline propagation simulator
 - [x] Audit logging
 - [x] Auto-purge after 48 hours
+- [x] Volunteer/Responder App with alert feed, navigation, status updates
+- [x] Volunteer online/offline shift management
+- [x] Safe check-in timer (5/15/30/60 min + custom)
+- [x] Community danger zone reporting + heatmap overlay
+- [x] Two-way E2E encrypted chat (victim <-> responder)
+- [x] Audio evidence capture (silent, encrypted)
+- [x] Video evidence capture (encrypted WebM, linked to alert ID)
+- [x] Disguise mode (Weather App / Calculator decoy)
+- [x] CCTV AI violence detection (CLIP ViT-B/32 zero-shot + YOLOv8-nano person gate + optical flow)
 
 ---
 
-## Hackathon Sprint (24h — Add These)
+## Hackathon Sprint (24h — Completed)
 
-### HIGH IMPACT / LOW EFFORT
+### HIGH IMPACT / LOW EFFORT — ALL DONE
 
-#### H1 — Volunteer/Responder App
+#### H1 — Volunteer/Responder App [DONE]
 A dedicated PWA for NGO volunteers and community responders.
 - Alert feed showing distance + threat level
 - "Accept" / "Decline" buttons
@@ -35,7 +44,7 @@ A dedicated PWA for NGO volunteers and community responders.
 - Shift check-in/check-out
 - **Why it matters:** Current system has no interface for volunteers. This closes the loop.
 
-#### H2 — Safe Check-In Timer
+#### H2 — Safe Check-In Timer [DONE]
 User sets a countdown before entering a risky situation.
 - Timer options: 5 / 15 / 30 / 60 min, or custom
 - Single-tap check-in to reset
@@ -43,7 +52,7 @@ User sets a countdown before entering a risky situation.
 - Auto-SOS trigger with "check-in missed" context fed to AI
 - **Why it matters:** Preventive safety for known-risk situations (late night travel, first dates, etc.)
 
-#### H3 — Danger Zone Community Reporting
+#### H3 — Danger Zone Community Reporting [DONE]
 Crowdsourced safety intelligence.
 - Pin a zone on map with category: harassment, poor lighting, isolated, crime-prone
 - Requires 3+ reports to appear publicly
@@ -52,7 +61,7 @@ Crowdsourced safety intelligence.
 - Zone expires after 30 days without reconfirmation
 - **Why it matters:** Gives the AI real local knowledge, not just generic time/location scoring.
 
-#### H4 — Two-Way Encrypted Chat
+#### H4 — Two-Way Encrypted Chat [DONE]
 Secure communication channel between victim and assigned responder.
 - Opens automatically when responder is dispatched
 - Pre-set quick-reply buttons: "I'm safe now", "Still in danger", "Send help fast"
@@ -60,7 +69,7 @@ Secure communication channel between victim and assigned responder.
 - Auto-closes on alert resolution, messages purged 24h later
 - **Why it matters:** Right now victim gets no confirmation responder is coming.
 
-#### H5 — Audio Evidence Capture (Silent)
+#### H5 — Audio Evidence Capture (Silent) [DONE]
 Silent audio recording on SOS trigger.
 - 2-minute encrypted recording stored locally on device
 - Option to upload to case file at alert resolution
@@ -68,11 +77,38 @@ Silent audio recording on SOS trigger.
 - User must explicitly consent in onboarding
 - **Why it matters:** Evidence capture dramatically improves prosecution rates.
 
+#### H6 — Video Evidence Capture [DONE]
+Video recording on SOS trigger.
+- Encrypted WebM video capture linked to alert ID
+- Stored in server evidence directory with unique filenames
+- AES-256-GCM encrypted at rest
+- Accessible from command dashboard for review
+- **Why it matters:** Video evidence provides stronger documentation for legal proceedings.
+
+#### H7 — CCTV AI Violence Detection [DONE]
+Real-time violence detection from CCTV/webcam feeds using multi-model AI pipeline.
+- **CLIP ViT-B/32 zero-shot classification** with balanced 6 safe + 6 threat labels
+- **YOLOv8-nano person gating** -- only runs classification when people are detected in frame
+- **Optical flow analysis** -- motion intensity scoring to filter out static false positives
+- Configurable confidence threshold for alert triggering
+- Auto-generates SOS alert in command dashboard when violence is detected
+- Live feed display with real-time overlay showing detection status
+- Event log with timestamps and confidence scores
+- **Why it matters:** Turns passive CCTV infrastructure into an active safety system that detects threats without human monitoring.
+
+#### H8 — Volunteer Online/Offline Shift Tracking [DONE]
+Shift management system for volunteer responders.
+- Online/Offline toggle in Volunteer App UI
+- Only online volunteers receive dispatch assignments
+- Shift status visible in command dashboard
+- Proximity-based auto-dispatch considers only available (online) volunteers
+- **Why it matters:** Ensures dispatch only targets available responders, reducing response time and failed dispatches.
+
 ---
 
 ### MEDIUM IMPACT / MEDIUM EFFORT
 
-#### M1 — Silent/Disguise Mode
+#### M1 — Silent/Disguise Mode [DONE]
 For domestic violence situations where the attacker may see the phone.
 - App icon replaceable with "Weather App" or "Calculator"
 - Decoy screen shows on open
@@ -184,12 +220,15 @@ Use this table to prioritize during the sprint:
 
 | Feature | Impact (1-5) | Effort (1-5) | Score (I/E) | Sprint? |
 |---------|-------------|--------------|-------------|---------|
-| Volunteer App | 5 | 2 | 2.5 | YES |
-| Safe Timer | 5 | 1 | 5.0 | YES |
-| Danger Zones | 4 | 2 | 2.0 | YES |
-| Two-way Chat | 4 | 2 | 2.0 | YES |
-| Audio Evidence | 4 | 2 | 2.0 | YES |
-| Disguise Mode | 4 | 3 | 1.3 | YES |
+| Volunteer App | 5 | 2 | 2.5 | DONE |
+| Safe Timer | 5 | 1 | 5.0 | DONE |
+| Danger Zones | 4 | 2 | 2.0 | DONE |
+| Two-way Chat | 4 | 2 | 2.0 | DONE |
+| Audio Evidence | 4 | 2 | 2.0 | DONE |
+| Video Evidence | 4 | 2 | 2.0 | DONE |
+| Disguise Mode | 4 | 3 | 1.3 | DONE |
+| CCTV AI Violence Detection | 5 | 3 | 1.7 | DONE |
+| Volunteer Shift Tracking | 4 | 1 | 4.0 | DONE |
 | Safe Route | 3 | 4 | 0.75 | MAYBE |
 | Trusted Contacts | 4 | 3 | 1.3 | MAYBE |
 | Multi-language | 3 | 3 | 1.0 | MAYBE |
@@ -209,4 +248,4 @@ Use this table to prioritize during the sprint:
 
 ---
 
-*Last updated: 2026-03-13 | NaariRakshak HackForImpact Team*
+*Last updated: 2026-03-14 | Team CodeCatalysts | NaariRakshak HackForImpact 2026*

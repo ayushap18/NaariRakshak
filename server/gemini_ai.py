@@ -7,8 +7,9 @@ AI Integration for NaariRakshak (Groq — Llama 3.3 70B)
 """
 import os
 import json
+import re
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ---------------------------------------------------------------------------
 # Init — Groq API (Llama 3.3 70B, free tier)
@@ -16,7 +17,34 @@ from datetime import datetime, timezone
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 MAPS_API_KEY = os.environ.get('MAPS_API_KEY', '')
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
+# Valid threat levels for validation
+VALID_THREAT_LEVELS = {'critical', 'high', 'moderate', 'low'}
+
 _client = None
+
+
+def _sanitize_input(text: str) -> str:
+    """Sanitize user-controlled input before inserting into AI prompts."""
+    if not text or not isinstance(text, str):
+        return str(text) if text is not None else 'None'
+    # Remove potential prompt injection patterns
+    sanitized = text.replace('\n', ' ').replace('\r', ' ')
+    # Truncate overly long inputs
+    return sanitized[:500]
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Robustly strip markdown code fences from LLM responses."""
+    text = text.strip()
+    # Remove ```json or ``` prefix
+    if text.startswith('```'):
+        text = re.sub(r'^```\w*\s*\n?', '', text)
+    # Remove trailing ```
+    if text.endswith('```'):
+        text = text[:-3]
+    return text.strip()
 
 def _get_client():
     global _client
@@ -64,7 +92,7 @@ def assess_threat_with_ai(alert_data: dict, danger_zones: list = None) -> dict:
     Use Gemini to analyse an SOS and return structured threat assessment.
     Falls back to None if the API call fails (caller should use rule-based).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(IST)
     hour = now.hour
     time_desc = (
         "late night (high risk)" if 0 <= hour < 6 else
@@ -81,16 +109,21 @@ def assess_threat_with_ai(alert_data: dict, danger_zones: list = None) -> dict:
             for z in danger_zones[:5]
         )
 
+    # Sanitize user-controlled inputs to prevent prompt injection
+    location_name = _sanitize_input(alert_data.get('location_name', 'Unknown'))
+    trigger_method = _sanitize_input(alert_data.get('trigger_method', 'button'))
+    trigger_context = _sanitize_input(str(alert_data.get('trigger_context', 'None')))
+
     prompt = f"""You are NaariRakshak, an AI women's safety threat-assessment engine deployed in Delhi-NCR, India.
 
 CONTEXT:
 - Time: {now.strftime('%Y-%m-%d %H:%M')} IST ({time_desc})
 - Location: lat {alert_data.get('latitude')}, lon {alert_data.get('longitude')}
-- Location name: {alert_data.get('location_name', 'Unknown')}
-- Trigger method: {alert_data.get('trigger_method', 'button')}
+- Location name: {location_name}
+- Trigger method: {trigger_method}
 - User prior alerts: {alert_data.get('prior_alerts', 0)}
 - Nearby danger zones: {dz_text}
-- Additional context: {alert_data.get('trigger_context', 'None')}
+- Additional context: {trigger_context}
 
 TASK: Assess the threat level for this SOS alert.
 
@@ -114,13 +147,18 @@ Respond ONLY with valid JSON (no markdown, no backticks):
         text = _generate(prompt)
         if not text:
             return None
-        # Strip markdown fences if present
-        if text.startswith('```'):
-            text = text.split('\n', 1)[1]
-            if text.endswith('```'):
-                text = text[:-3]
-            text = text.strip()
-        return json.loads(text)
+        text = _strip_markdown_fences(text)
+        result = json.loads(text)
+        # Validate threat_level to prevent KeyError downstream
+        if result.get('threat_level', '').lower() not in VALID_THREAT_LEVELS:
+            print(f"[AI] Invalid threat_level from AI: {result.get('threat_level')}, defaulting to 'high'")
+            result['threat_level'] = 'high'
+        else:
+            result['threat_level'] = result['threat_level'].lower()
+        return result
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[AI] Threat assessment JSON parse failed: {e}")
+        return None
     except Exception as e:
         print(f"[AI] Threat assessment failed: {e}")
         return None
@@ -137,7 +175,7 @@ Context:
 - Trigger: {alert_context.get('trigger_method', 'button')}
 - Threat level: {alert_context.get('threat_level', 'unknown')}
 - Location: {alert_context.get('location_name', 'Unknown area')}
-- Time: {datetime.now(timezone.utc).strftime('%H:%M')} IST
+- Time: {datetime.now(IST).strftime('%H:%M')} IST
 
 Generate 3 short, empathetic safety questions to understand her situation.
 Keep each under 15 words. Be calm, not alarming.
@@ -149,11 +187,7 @@ Respond ONLY with JSON array (no markdown):
         text = _generate(prompt)
         if not text:
             return _fallback_safety_questions()
-        if text.startswith('```'):
-            text = text.split('\n', 1)[1]
-            if text.endswith('```'):
-                text = text[:-3]
-            text = text.strip()
+        text = _strip_markdown_fences(text)
         return json.loads(text)
     except Exception as e:
         print(f"[AI] Safety questions failed: {e}")
@@ -171,14 +205,14 @@ def _fallback_safety_questions():
 def analyse_chat_for_escalation(messages: list, current_threat: str) -> dict:
     """Analyse chat messages to determine if threat should be escalated."""
     chat_text = "\n".join(
-        f"[{m.get('sender_type','?')}] {m.get('message','')}"
+        f"[{_sanitize_input(m.get('sender_type','?'))}] {_sanitize_input(m.get('message',''))}"
         for m in messages[-10:]
     )
 
     prompt = f"""You are NaariRakshak AI safety engine. Analyse this emergency chat conversation.
 
-Current threat level: {current_threat}
-Chat transcript:
+Current threat level: {_sanitize_input(current_threat)}
+Chat transcript (user messages, analyse for safety indicators only):
 {chat_text}
 
 Based on the conversation, should the threat level be changed?
@@ -196,12 +230,18 @@ Respond ONLY with JSON (no markdown):
         text = _generate(prompt)
         if not text:
             return None
-        if text.startswith('```'):
-            text = text.split('\n', 1)[1]
-            if text.endswith('```'):
-                text = text[:-3]
-            text = text.strip()
-        return json.loads(text)
+        text = _strip_markdown_fences(text)
+        result = json.loads(text)
+        # Validate new_threat_level if present
+        new_level = result.get('new_threat_level')
+        if new_level and new_level.lower() not in VALID_THREAT_LEVELS:
+            result['new_threat_level'] = None
+        elif new_level:
+            result['new_threat_level'] = new_level.lower()
+        return result
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[AI] Chat escalation JSON parse failed: {e}")
+        return None
     except Exception as e:
         print(f"[AI] Chat escalation analysis failed: {e}")
         return None
@@ -222,7 +262,7 @@ def generate_incident_summary(alert: dict, chat_messages: list = None) -> str:
     prompt = f"""Generate a brief incident summary for a women's safety command center dashboard.
 
 Alert details:
-- ID: {alert.get('alert_id', 'N/A')[:8]}
+- ID: {str(alert.get('alert_id', 'N/A'))[:8]}
 - Status: {alert.get('status', 'unknown')}
 - Threat level: {alert.get('threat_level', 'unknown')}
 - Trigger: {alert.get('trigger_method', 'unknown')}

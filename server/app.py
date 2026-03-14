@@ -31,6 +31,7 @@ from gemini_ai import (
 )
 from cctv_ai import (
     analyse_frame as cctv_analyse_frame,
+    analyse_frame_temporal as cctv_analyse_frame_temporal,
     analyse_video as cctv_analyse_video,
     get_model_status as cctv_model_status,
     is_model_loaded as cctv_model_loaded,
@@ -42,11 +43,12 @@ app = Flask(__name__)
 config_name = os.getenv('FLASK_CONFIG', 'development')
 app.config.from_object(config[config_name])
 
-# Enable CORS
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# Enable CORS — restrict origins in production
+ALLOWED_ORIGINS = os.getenv('ALLOWED_ORIGINS', '*').split(',')
+CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
 
 # Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS != ['*'] else "*", async_mode='threading')
 
 # Initialize database
 engine = init_db(app.config['DATABASE_PATH'])
@@ -59,6 +61,7 @@ mesh_network = MeshNetworkSimulator()
 # Track active connections
 active_users = {}  # {user_id: socket_id}
 active_alerts = {}  # {alert_id: alert_data}
+active_volunteers = {}  # {responder_id: socket_id} — online volunteers on shift
 
 # Runtime mode: can be toggled via API
 app_mode = {'demo': app.config.get('DEMO_MODE', True)}
@@ -132,13 +135,16 @@ def register_user():
     
     session = get_session(engine)
     try:
-        data = request.json
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({'error': 'JSON body required'}), 400
+
         name = data.get('name')
         phone = data.get('phone')
-        
+
         if not name or not phone:
             return jsonify({'error': 'Name and phone required'}), 400
-        
+
         # Check if user exists
         existing_user = session.query(User).filter_by(phone=phone).first()
         if existing_user:
@@ -149,10 +155,10 @@ def register_user():
                 'message': 'User already registered',
                 'user': user_dict
             })
-        
+
         # Create new user
         ephemeral_id = encryption_mgr.generate_ephemeral_id(hash(phone))
-        
+
         user = User(
             ephemeral_id=ephemeral_id,
             name=name,
@@ -161,20 +167,21 @@ def register_user():
             preferences=json.dumps(data.get('preferences', {})),
             is_verified=True  # Auto-verify for demo
         )
-        
+
         session.add(user)
         session.commit()
-        
+
         user_dict = user.to_dict()
         # Add full phone for client-side storage (needed for SOS)
         user_dict['phone_full'] = phone
-        
+
         return jsonify({
             'message': 'User registered successfully',
             'user': user_dict
         }), 201
-        
+
     except Exception as e:
+        session.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         session.close()
@@ -288,9 +295,13 @@ def trigger_sos():
         # Find nearby responders
         nearby_responders = find_nearby_responders(session, latitude, longitude)
 
-        # AUTO-DISPATCH to nearest available responder
+        # AUTO-DISPATCH: skip if volunteers are online (let them accept manually)
         auto_dispatched = None
-        if nearby_responders:
+        if active_volunteers:
+            # Volunteers are online — send targeted notification, no auto-dispatch
+            print(f'[Dispatch] {len(active_volunteers)} volunteer(s) online — skipping auto-dispatch for {alert_id}')
+            socketio.emit('volunteer_alert', alert_dict, room='volunteers')
+        elif nearby_responders:
             nearest = nearby_responders[0]
             nearest.is_available = False
             nearest.current_alert_id = alert_id
@@ -343,6 +354,17 @@ def trigger_sos():
             session.add(dispatch_msg)
             session.commit()
             socketio.emit('new_chat_message', dispatch_msg.to_dict())
+        elif active_volunteers:
+            vol_msg = ChatMessage(
+                alert_id=alert_id,
+                sender_type='system',
+                sender_name='NaariRakshak',
+                message=f'🦺 {len(active_volunteers)} volunteer(s) online — notified and waiting for acceptance.',
+                is_quick_reply=False
+            )
+            session.add(vol_msg)
+            session.commit()
+            socketio.emit('new_chat_message', vol_msg.to_dict())
 
         # AI safety assistant — auto-ask contextual safety questions
         try:
@@ -872,7 +894,13 @@ def cctv_frame():
     else:
         image_bytes = request.files['frame'].read()
 
-    result = cctv_analyse_frame(image_bytes)
+    # Use temporal analysis for live webcam (reduces false positives)
+    # Single image uploads can use ?temporal=false to bypass
+    use_temporal = request.args.get('temporal', 'true').lower() != 'false'
+    if use_temporal:
+        result = cctv_analyse_frame_temporal(image_bytes)
+    else:
+        result = cctv_analyse_frame(image_bytes)
 
     # If threat detected, notify dashboard via socket
     if result.get('threat_detected'):
@@ -1036,11 +1064,20 @@ def handle_connect():
 def handle_disconnect():
     """Handle client disconnection"""
     print(f'Client disconnected: {request.sid}')
-    
+
     # Remove from active users
     for user_id, socket_id in list(active_users.items()):
         if socket_id == request.sid:
             del active_users[user_id]
+            break
+
+    # Remove from active volunteers
+    for vid, sid in list(active_volunteers.items()):
+        if sid == request.sid:
+            del active_volunteers[vid]
+            leave_room('volunteers')
+            print(f'[Volunteer] {vid} went offline (disconnect)')
+            socketio.emit('volunteer_count', {'count': len(active_volunteers)})
             break
 
 
@@ -1052,6 +1089,28 @@ def handle_user_register(data):
         active_users[user_id] = request.sid
         join_room(f'user_{user_id}')
         emit('registered', {'user_id': user_id})
+
+
+@socketio.on('volunteer_go_online')
+def handle_volunteer_online(data):
+    """Volunteer starts shift — joins the volunteers room for targeted alerts"""
+    responder_id = data.get('responder_id')
+    if responder_id:
+        active_volunteers[responder_id] = request.sid
+        join_room('volunteers')
+        print(f'[Volunteer] {responder_id} is now ONLINE ({len(active_volunteers)} total)')
+        socketio.emit('volunteer_count', {'count': len(active_volunteers)})
+
+
+@socketio.on('volunteer_go_offline')
+def handle_volunteer_offline(data):
+    """Volunteer ends shift"""
+    responder_id = data.get('responder_id')
+    if responder_id and responder_id in active_volunteers:
+        del active_volunteers[responder_id]
+        leave_room('volunteers')
+        print(f'[Volunteer] {responder_id} went OFFLINE ({len(active_volunteers)} total)')
+        socketio.emit('volunteer_count', {'count': len(active_volunteers)})
 
 
 @socketio.on('location_update')
@@ -1762,10 +1821,13 @@ def simulate_sos():
         active_alerts[alert_id] = alert_dict
         socketio.emit('alert_triggered', alert_dict)
 
-        # Auto-dispatch nearest responder
+        # Auto-dispatch: skip if volunteers are online
         nearby = find_nearby_responders(session, lat, lon)
         dispatched_responder = None
-        if nearby:
+        if active_volunteers:
+            print(f'[Dispatch] {len(active_volunteers)} volunteer(s) online — skipping auto-dispatch for {alert_id}')
+            socketio.emit('volunteer_alert', alert_dict, room='volunteers')
+        elif nearby:
             nearest = nearby[0]
             nearest.is_available = False
             nearest.current_alert_id = alert_id
@@ -1799,6 +1861,14 @@ def simulate_sos():
             session.add(d_msg)
             session.commit()
             socketio.emit('new_chat_message', d_msg.to_dict())
+        elif active_volunteers:
+            v_msg = ChatMessage(
+                alert_id=alert_id, sender_type='system', sender_name='NaariRakshak',
+                message=f'🦺 {len(active_volunteers)} volunteer(s) online — notified and waiting for acceptance.'
+            )
+            session.add(v_msg)
+            session.commit()
+            socketio.emit('new_chat_message', v_msg.to_dict())
 
         return jsonify({'message': 'Demo SOS simulated', 'alert': alert_dict, 'area': area}), 201
     except Exception as e:
@@ -1818,6 +1888,14 @@ def handle_trigger_sos_socket(data):
 if __name__ == '__main__':
     # Initialize demo data
     init_demo_data()
+
+    # Pre-load CCTV AI model before starting server so it's ready immediately
+    print("[Startup] Pre-loading CCTV AI model...", flush=True)
+    try:
+        cctv_load_model()
+        print("[Startup] CCTV AI model ready.", flush=True)
+    except Exception as e:
+        print(f"[Startup] CCTV AI model preload failed: {e}", flush=True)
 
     port = app.config['PORT']
     

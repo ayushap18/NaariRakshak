@@ -1,5 +1,5 @@
 # NaariRakshak — 24-Hour Hackathon Sprint Plan
-> HackForImpact 2026 | Start: Day 1, 9:00 AM
+> **Team CodeCatalysts** | HackForImpact 2026 — Track 2: Social Impact | Start: Day 1, 9:00 AM
 
 ---
 
@@ -35,22 +35,22 @@ By the end of 24 hours, we demo:
 
 ```
 Hour 0-1: Setup
-  [ ] All team members clone repo and run server successfully
-  [ ] Confirm: dashboard loads, mobile app loads, demo data seeded
-  [ ] Assign feature ownership — no overlapping work
-  [ ] Create feature branches: feat/volunteer-app, feat/safe-timer, etc.
+  [x] All team members clone repo and run server successfully
+  [x] Confirm: dashboard loads, mobile app loads, demo data seeded
+  [x] Assign feature ownership — no overlapping work
+  [x] Create feature branches: feat/volunteer-app, feat/safe-timer, etc.
 
 Hour 1-2: Architecture decisions
-  [ ] Review existing code (app.py, models.py, ai_engine.py)
-  [ ] Plan new DB columns needed (timer, danger zones, chat messages)
-  [ ] Agree on volunteer app design (mockup reference)
-  [ ] Set up ngrok for mobile testing on physical phones
+  [x] Review existing code (app.py, models.py, ai_engine.py)
+  [x] Plan new DB columns needed (timer, danger zones, chat messages)
+  [x] Agree on volunteer app design (mockup reference)
+  [x] Set up ngrok for mobile testing on physical phones
 
 Hour 2-3: Database schema additions
-  [ ] Add CheckInTimer model (user_id, expires_at, is_active)
-  [ ] Add DangerZone model (lat, lon, category, report_count, created_at)
-  [ ] Add ChatMessage model (alert_id, sender_type, message_encrypted, timestamp)
-  [ ] Run migrations (db.create_all())
+  [x] Add CheckInTimer model (user_id, expires_at, is_active)
+  [x] Add DangerZone model (lat, lon, category, report_count, created_at)
+  [x] Add ChatMessage model (alert_id, sender_type, message_encrypted, timestamp)
+  [x] Run migrations (db.create_all())
 ```
 
 ---
@@ -60,38 +60,38 @@ Hour 2-3: Database schema additions
 
 ```
 Hour 3-6: Volunteer App (Frontend Lead)
-  [ ] Create server/templates/volunteer.html
-  [ ] Add Flask route: GET /volunteer
-  [ ] Volunteer registration: name, phone, type (police/volunteer/medical)
-  [ ] Alert feed: list of active alerts sorted by distance
-  [ ] Accept alert button → WebSocket event to backend
-  [ ] Navigation button → OLA Maps deep link with victim coordinates
-  [ ] Status update: En Route / Arrived / Resolved
-  [ ] Connect to Socket.IO for real-time alert updates
+  [x] Create server/templates/volunteer.html
+  [x] Add Flask route: GET /volunteer
+  [x] Volunteer registration: name, phone, type (police/volunteer/medical)
+  [x] Alert feed: list of active alerts sorted by distance
+  [x] Accept alert button → WebSocket event to backend
+  [x] Navigation button → OLA Maps deep link with victim coordinates
+  [x] Status update: En Route / Arrived / Resolved
+  [x] Connect to Socket.IO for real-time alert updates
 
 Hour 3-6: Safe Check-In Timer (Backend Lead)
-  [ ] POST /api/checkin-timer endpoint
-  [ ] POST /api/checkin (reset timer)
-  [ ] Background task: check expired timers every 30 seconds
-  [ ] Auto-trigger SOS with trigger_method="timer_expired"
-  [ ] Frontend: timer UI on mobile app home screen
-  [ ] Push notification warning at T-1 minute
+  [x] POST /api/checkin-timer endpoint
+  [x] POST /api/checkin (reset timer)
+  [x] Background task: check expired timers every 30 seconds
+  [x] Auto-trigger SOS with trigger_method="timer_expired"
+  [x] Frontend: timer UI on mobile app home screen
+  [x] Push notification warning at T-1 minute
 
 Hour 6-9: Danger Zones (AI/Data + Backend Lead)
-  [ ] POST /api/danger-zones (report a zone, require lat/lon/category)
-  [ ] GET /api/danger-zones (return all active zones as GeoJSON)
-  [ ] Dashboard: heatmap overlay using Leaflet.heat plugin
-  [ ] Mobile: "Report Danger Zone" button in menu
-  [ ] AI engine: check if alert location is inside a danger zone, add risk factor
-  [ ] Auto-expire zones > 30 days old
+  [x] POST /api/danger-zones (report a zone, require lat/lon/category)
+  [x] GET /api/danger-zones (return all active zones as GeoJSON)
+  [x] Dashboard: heatmap overlay using Leaflet.heat plugin
+  [x] Mobile: "Report Danger Zone" button in menu
+  [x] AI engine: check if alert location is inside a danger zone, add risk factor
+  [x] Auto-expire zones > 30 days old
 
 Hour 9-12: Two-Way Chat (Backend Lead)
-  [ ] ChatMessage model with encryption
-  [ ] WebSocket: send_chat_message event (user → responder)
-  [ ] WebSocket: receive_chat_message event (broadcast to alert room)
-  [ ] Mobile: simple chat UI shown when alert is active
-  [ ] Volunteer app: chat panel on active alert screen
-  [ ] Pre-built quick replies: ["I'm safe now", "Still in danger", "Hurry please"]
+  [x] ChatMessage model with encryption
+  [x] WebSocket: send_chat_message event (user → responder)
+  [x] WebSocket: receive_chat_message event (broadcast to alert room)
+  [x] Mobile: simple chat UI shown when alert is active
+  [x] Volunteer app: chat panel on active alert screen
+  [x] Pre-built quick replies: ["I'm safe now", "Still in danger", "Hurry please"]
 ```
 
 ---
@@ -100,26 +100,38 @@ Hour 9-12: Two-Way Chat (Backend Lead)
 **Goal:** Make it look and feel real
 
 ```
-Hour 12-14: Audio Evidence (Frontend Lead)
-  [ ] Mobile: MediaRecorder API for silent audio capture
-  [ ] Start recording 3 seconds after SOS trigger
-  [ ] Store as encrypted blob (client-side for demo)
-  [ ] Show "Upload evidence" button when alert resolves
-  [ ] Backend: POST /api/evidence endpoint to receive file
+Hour 12-14: Audio/Video Evidence (Frontend Lead)
+  [x] Mobile: MediaRecorder API for silent audio/video capture
+  [x] Start recording 3 seconds after SOS trigger
+  [x] Store as encrypted blob (WebM format)
+  [x] Show "Upload evidence" button when alert resolves
+  [x] Backend: POST /api/evidence endpoint to receive file
+  [x] Evidence auto-saved to server evidence/ directory
 
 Hour 14-16: Dashboard Enhancements (Frontend Lead)
-  [ ] Add danger zone heatmap layer toggle
-  [ ] Add volunteer status panel (separate from police/medical)
-  [ ] Show chat messages in alert detail view
-  [ ] Add AI confidence meter as visual progress bar
-  [ ] Improve stats panel: add avg response time chart
+  [x] Add danger zone heatmap layer toggle
+  [x] Add volunteer status panel (separate from police/medical)
+  [x] Show chat messages in alert detail view
+  [x] Add AI confidence meter as visual progress bar
+  [x] Improve stats panel: add avg response time chart
+
+Hour 14-16: CCTV AI Violence Detection (AI/Data — ADDED)
+  [x] Create server/templates/cctv.html with dark monitoring UI
+  [x] Add Flask route: GET /cctv
+  [x] Integrate OpenAI CLIP ViT-B/32 for zero-shot violence classification
+  [x] Add YOLOv8-nano person detection gate (skip empty frames)
+  [x] Add Farneback optical flow for motion intensity scoring
+  [x] Real-time detection status indicators (Safe / Warning / Violence)
+  [x] Scrollable event log with timestamped detections
+  [x] WebM video evidence recording and auto-save
+  [x] Gemini AI integration for intelligent alert summaries
 
 Hour 16-17: Disguise Mode (Frontend Lead)
-  [ ] Settings page on mobile app
-  [ ] Toggle: "Enable Disguise Mode"
-  [ ] Disguise as "Weather App" with realistic UI
-  [ ] Hidden trigger: triple-tap top of screen
-  [ ] Alert triggers silently
+  [x] Settings page on mobile app
+  [x] Toggle: "Enable Disguise Mode"
+  [x] Disguise as "Weather App" with realistic UI
+  [x] Hidden trigger: triple-tap top of screen
+  [x] Alert triggers silently
 
 Hour 17-18: Multi-language Basics (Full Team)
   [ ] i18n JSON file: en.json, hi.json (Hindi)
@@ -193,37 +205,45 @@ Hour 23-24: Final prep
 ### Demo Flow (3.5 min)
 
 **Act 1 — The Incident (45 sec)**
-- Open user mobile app on phone
+- Open user mobile app on phone (route: `/app`)
 - Show the safe check-in timer: "Priya set a 15-minute timer before getting in an auto"
 - Skip ahead: "The timer expired. She didn't check in."
 - Watch auto-SOS trigger on dashboard — alert appears on map, AI says "High threat"
 
 **Act 2 — Command Center Response (45 sec)**
-- Switch to dashboard on laptop
+- Switch to dashboard on laptop (route: `/dashboard`)
 - Show live alert on Delhi map
 - Point out AI threat level bar, nearby responders
 - Click dispatch → nearest volunteer assigned
 - Show stats update (response time counter starts)
 
 **Act 3 — Volunteer Responds (45 sec)**
-- Open volunteer app on second phone/tab
+- Open volunteer app on second phone/tab (route: `/volunteer`)
 - Volunteer sees alert with distance: "2.3 km away — HIGH threat"
 - Tap "Accept" — status changes to En Route in dashboard
-- Tap "Navigate" — OLA Maps opens with victim coordinates
+- Tap "Navigate" — Google Maps opens with victim coordinates
 - Chat: volunteer sends "I'm on my way, please stay where you are"
 
-**Act 4 — Resolution + Evidence (45 sec)**
+**Act 4 — Resolution + Evidence (30 sec)**
 - Back on user app: show chat message from volunteer
 - Show "I'm Safe" quick reply sent
-- Open evidence section: 2-minute audio recording captured silently
+- Open evidence section: audio/video recording captured silently (WebM)
 - Volunteer marks "Resolved" — alert closes on dashboard
 
-**Act 5 — Danger Zones (30 sec)**
+**Act 5 — CCTV AI Monitoring (30 sec)**
+- Switch to CCTV dashboard (route: `/cctv`)
+- Show live video feed with real-time AI analysis running
+- Point out detection pipeline: "YOLOv8 detects persons, optical flow measures motion, CLIP classifies the scene"
+- Demonstrate a detection event appearing in the event log
+- Show evidence recording: "Video is automatically captured and saved"
+- Highlight: "This runs 24/7 with zero human fatigue"
+
+**Act 6 — Danger Zones (15 sec)**
 - Show heatmap overlay: "Community has reported 3 danger zones nearby"
 - Point: "Our AI used this to increase the threat score by 15%"
 
 ### Closing (1 min)
-> "In this demo, a woman got help in under 45 seconds. The national average is 12-30 minutes. NaariRakshak works offline via our mesh network, encrypts everything with AES-256, and never stores PII. We're ready to pilot with NGOs in Delhi, and we've already got interest from [mention any]. Thank you."
+> "In this demo, a woman got help in under 45 seconds. The national average is 12-30 minutes. NaariRakshak works offline via our mesh network, encrypts everything with AES-256, and our CCTV AI watches public spaces around the clock. We never store PII. We're ready to pilot with NGOs in Delhi, and we've already got interest from [mention any]. Thank you."
 
 ---
 
@@ -253,13 +273,15 @@ Hour 23-24: Final prep
 ## Success Criteria
 
 By demo time, judges should see:
-- [ ] < 5 second SOS to alert on dashboard
-- [ ] < 30 second SOS to volunteer notified
-- [ ] Live map with alert, responder, and danger zone markers
-- [ ] AI threat level with explanation
-- [ ] One complete chat exchange between victim and responder
-- [ ] Encryption mentioned (no plaintext lat/lon in network tab)
+- [x] < 5 second SOS to alert on dashboard
+- [x] < 30 second SOS to volunteer notified
+- [x] Live map with alert, responder, and danger zone markers
+- [x] AI threat level with explanation
+- [x] One complete chat exchange between victim and responder
+- [x] Encryption mentioned (no plaintext lat/lon in network tab)
+- [x] CCTV AI violence detection running on live video feed
+- [x] Audio/video evidence capture and auto-save
 
 ---
 
-*Plan owner: Hackathon Team | Start: 2026-03-13 | Target: 2026-03-14*
+*Plan owner: Team CodeCatalysts | Start: 2026-03-13 | Target: 2026-03-14*

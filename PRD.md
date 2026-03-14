@@ -1,5 +1,5 @@
 # NaariRakshak — Product Requirements Document
-> HackForImpact 2026 | 24-Hour Sprint
+> **Team CodeCatalysts** | HackForImpact 2026 — Track 2: Social Impact | 24-Hour Sprint
 
 ---
 
@@ -42,9 +42,10 @@
 ### 4.1 Core Platforms
 
 ```
-Platform A — User Mobile App       (mobile.html / React Native future)
-Platform B — Central Command       (dashboard.html / React future)
-Platform C — Volunteer/Responder   (NEW — volunteer.html)
+Platform A — User Mobile App       (mobile.html, route: /app / React Native future)
+Platform B — Central Command       (dashboard.html, route: /dashboard / React future)
+Platform C — Volunteer/Responder   (volunteer.html, route: /volunteer / PWA)
+Platform D — CCTV AI Monitoring    (cctv.html, route: /cctv)
 ```
 
 ### 4.2 Feature Priority Matrix
@@ -58,11 +59,12 @@ Platform C — Volunteer/Responder   (NEW — volunteer.html)
 | Live alert map | P0 | Dashboard | ✅ Built |
 | Mesh network propagation | P0 | Backend | ✅ Built |
 | E2E encryption | P0 | Backend | ✅ Built |
-| Volunteer app | P1 | Volunteer | 🔴 TODO |
-| Safe check-in timer | P1 | User | 🔴 TODO |
-| Two-way responder chat | P1 | All | 🔴 TODO |
-| Community danger zones | P1 | All | 🔴 TODO |
-| Audio evidence recording | P1 | User | 🔴 TODO |
+| Volunteer app | P1 | Volunteer | ✅ Built |
+| Safe check-in timer | P1 | User | ✅ Built |
+| Two-way responder chat | P1 | All | ✅ Built |
+| Community danger zones | P1 | All | ✅ Built |
+| Audio evidence recording | P1 | User | ✅ Built |
+| CCTV AI violence detection | P0 | CCTV | ✅ Built |
 | Multi-language support | P1 | User | 🔴 TODO |
 | Safe route navigator | P2 | User | 🔴 TODO |
 | Wearable (smartwatch) SOS | P2 | User | 🔴 TODO |
@@ -196,6 +198,33 @@ Platform C — Volunteer/Responder   (NEW — volunteer.html)
 
 ---
 
+### F-009: CCTV AI Violence Detection
+
+**Problem:** Public CCTV footage is monitored passively (if at all). Incidents in public spaces go undetected until after the fact, and human operators suffer from attention fatigue.
+
+**Solution:** An AI-powered CCTV monitoring dashboard that analyzes live video feeds in real time to detect violence and suspicious activity. The pipeline uses a three-stage detection approach:
+
+1. **YOLOv8-nano person gate** — Only triggers analysis when persons are detected in frame, reducing false positives from empty scenes.
+2. **Farneback optical flow** — Measures motion intensity to distinguish aggressive movement from normal pedestrian activity.
+3. **OpenAI CLIP ViT-B/32 zero-shot classification** — Classifies scenes using balanced positive/negative label sets (6 violence labels + 6 safe labels) without any task-specific training data.
+
+**Key Components:**
+- Live webcam/CCTV feed displayed in a dark-themed monitoring dashboard (`/cctv`)
+- Real-time detection status indicators (Safe / Warning / Violence Detected)
+- Scrollable event log panel with timestamped detections
+- Audio/Video evidence capture (WebM recording, auto-saved to server `evidence/` directory)
+- Configurable detection thresholds and analysis interval
+
+**Acceptance Criteria:**
+- Detection pipeline processes frames within 2 seconds
+- False positive rate below 15% on typical indoor/outdoor footage
+- Event log records all detections with timestamp, confidence score, and frame snapshot
+- Evidence recordings can be started/stopped manually and are auto-saved on detection
+- Dashboard runs in any modern browser with webcam access
+- Works alongside the main NaariRakshak platform (same Flask server)
+
+---
+
 ## 6. Non-Functional Requirements
 
 | Category | Requirement |
@@ -214,34 +243,40 @@ Platform C — Volunteer/Responder   (NEW — volunteer.html)
 ## 7. Technical Architecture (Hackathon Target)
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                        CLIENT LAYER                            │
-├──────────────────┬─────────────────────┬───────────────────────┤
-│  User App        │  Command Dashboard  │  Volunteer App        │
-│  (mobile.html)   │  (dashboard.html)   │  (volunteer.html NEW) │
-│  React Native    │  React + Leaflet    │  PWA + React          │
-│  (future)        │  (future)           │  (hackathon: HTML)    │
-└────────┬─────────┴──────────┬──────────┴────────────┬──────────┘
-         │    WebSocket       │    REST API            │
-         └────────────────────┼────────────────────────┘
-┌────────────────────────────────────────────────────────────────┐
-│                       BACKEND (Flask)                          │
-├──────────────────────────────────────────────────────────────┬─┤
-│  SOS Handler │ Responder Dispatch │ WebSocket Events          │ │
-│  AI Engine   │ Mesh Network       │ Encryption Manager       │ │
-│  Route Safety│ Danger Zone API    │ Audio Evidence Store     │ │
-└──────────────────────────────────────────────────┬───────────┘ │
-                                                   │             │
-                              ┌────────────────────▼──────────┐  │
-                              │   SQLite → PostgreSQL (prod)  │  │
-                              └───────────────────────────────┘  │
-                                                                  │
-                              ┌───────────────────────────────┐   │
-                              │  External Integrations        │   │
-                              │  - OLA Maps / Google Maps     │   │
-                              │  - Twilio SMS fallback        │   │
-                              │  - 112 India API (future)     │   │
-                              └───────────────────────────────┘   │
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              CLIENT LAYER                                    │
+├──────────────────┬────────────────────┬──────────────────┬───────────────────┤
+│  User App        │  Command Dashboard │  Volunteer App   │  CCTV AI Monitor  │
+│  (mobile.html)   │  (dashboard.html)  │  (volunteer.html)│  (cctv.html)      │
+│  Route: /app     │  Route: /dashboard │  Route: /volunteer│ Route: /cctv     │
+│  React Native    │  React + Leaflet   │  PWA + React     │  WebRTC + Canvas  │
+│  (future)        │  (future)          │  (hackathon:HTML)│  CLIP + YOLO      │
+└────────┬─────────┴──────────┬─────────┴─────────┬────────┴─────────┬─────────┘
+         │    WebSocket       │    REST API        │                  │
+         └────────────────────┼────────────────────┘                  │
+                              │                           Video Frame Analysis
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         BACKEND (Flask)                                       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  SOS Handler │ Responder Dispatch │ WebSocket Events │ CCTV AI Pipeline      │
+│  AI Engine   │ Mesh Network       │ Encryption Mgr   │ (CLIP + YOLOv8 +     │
+│  Route Safety│ Danger Zone API    │ Audio/Video       │  Optical Flow)        │
+│              │                    │ Evidence Store    │ Gemini AI Integration │
+└──────────────────────────────────────────────────────┬───────────────────────┘
+                                                       │
+                              ┌─────────────────────────▼──────────────┐
+                              │   SQLite → PostgreSQL (prod)           │
+                              └────────────────────────────────────────┘
+
+                              ┌─────────────────────────────────────────┐
+                              │  External Integrations                  │
+                              │  - OLA Maps / Google Maps               │
+                              │  - Twilio SMS fallback                  │
+                              │  - Google Gemini AI                     │
+                              │  - OpenAI CLIP (ViT-B/32)              │
+                              │  - Ultralytics YOLOv8-nano             │
+                              │  - 112 India API (future)              │
+                              └─────────────────────────────────────────┘
 ```
 
 ---
@@ -279,4 +314,4 @@ Platform C — Volunteer/Responder   (NEW — volunteer.html)
 
 ---
 
-*Document owner: Hackathon Team NaariRakshak | Last updated: 2026-03-13*
+*Document owner: Team CodeCatalysts — NaariRakshak | Last updated: 2026-03-14*

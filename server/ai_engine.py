@@ -3,6 +3,8 @@ AI-powered threat assessment and false alarm detection
 """
 import numpy as np
 from datetime import datetime, time, timedelta, timezone
+
+IST = timezone(timedelta(hours=5, minutes=30))
 from typing import Dict, Any, Tuple
 import json
 from utils import calculate_distance
@@ -52,8 +54,8 @@ class ThreatAssessmentEngine:
         risk_score = 0.0
         risk_factors = {}
         
-        # Time-based risk
-        current_time = datetime.now(timezone.utc)
+        # Time-based risk (use IST for Delhi-NCR deployment)
+        current_time = datetime.now(IST)
         hour = current_time.hour
         time_risk = self.time_weights.get(hour, 1.0)
         risk_score += time_risk * 0.3
@@ -113,7 +115,7 @@ class ThreatAssessmentEngine:
 
     def _check_danger_zones(self, latitude, longitude) -> float:
         """Return boost score (0.15) if alert is inside a known danger zone"""
-        if not latitude or not longitude:
+        if latitude is None or longitude is None:
             return 0.0
         zones = getattr(self, '_danger_zones', [])
         for zone in zones:
@@ -238,15 +240,18 @@ class ThreatAssessmentEngine:
         """
         if user_id not in self.user_patterns:
             return 0.5  # No pattern data, moderate risk
-        
+
         user_pattern = self.user_patterns[user_id]
-        
-        # Check if location is unusual
+
+        # Check if location is unusual (skip if no coordinates)
         usual_locations = user_pattern.get('usual_locations', [])
-        is_usual_location = any(
-            calculate_distance(latitude, longitude, loc['lat'], loc['lng']) < 1
-            for loc in usual_locations
-        )
+        if latitude is not None and longitude is not None:
+            is_usual_location = any(
+                calculate_distance(latitude, longitude, loc['lat'], loc['lng']) < 1
+                for loc in usual_locations
+            )
+        else:
+            is_usual_location = True  # Can't assess without coords
         
         # Check if time is unusual
         hour = current_time.hour

@@ -245,6 +245,8 @@
             <div class="threat-bar-item" data-key="weapon_threat"><span class="tb-label">🔪 Weapon</span><div class="tb-track"><div class="tb-fill" id="bar-weapon_threat"></div></div><span class="tb-val" id="val-weapon_threat">—</span></div>
             <div class="threat-bar-item" data-key="distress"><span class="tb-label">😰 Distress</span><div class="tb-track"><div class="tb-fill" id="bar-distress"></div></div><span class="tb-val" id="val-distress">—</span></div>
             <div class="threat-bar-item" data-key="robbery"><span class="tb-label">💰 Robbery</span><div class="tb-track"><div class="tb-fill" id="bar-robbery"></div></div><span class="tb-val" id="val-robbery">—</span></div>
+            <div class="threat-bar-item" data-key="abduction"><span class="tb-label">🚗 Abduction</span><div class="tb-track"><div class="tb-fill" id="bar-abduction"></div></div><span class="tb-val" id="val-abduction">—</span></div>
+            <div class="threat-bar-item" data-key="mob_attack"><span class="tb-label">👥 Mob Attack</span><div class="tb-track"><div class="tb-fill" id="bar-mob_attack"></div></div><span class="tb-val" id="val-mob_attack">—</span></div>
           </div>
         </div>
 
@@ -356,7 +358,7 @@
     let totalSafe = 0;
     let threatTypeCounts = {};
     let eventList = [];
-    const THREAT_KEYS = ['violence', 'harassment', 'stalking', 'weapon_threat', 'distress', 'robbery'];
+    const THREAT_KEYS = ['violence', 'harassment', 'stalking', 'weapon_threat', 'distress', 'robbery', 'abduction', 'mob_attack'];
     const THREAT_ICONS = { violence: '🥊', harassment: '🚫', stalking: '👁️', weapon_threat: '🔪', distress: '😰', robbery: '💰' };
 
     // ─── INIT ───
@@ -388,7 +390,9 @@
             badge.innerHTML = '<span style="color:var(--warning);">◌ Loading CLIP…</span>';
             setTimeout(checkModelStatus, 3000);
           } else {
-            badge.innerHTML = '<span style="color:var(--muted);">○ Model idle — <a href="#" onclick="loadModel();return false" style="color:var(--info);">Load</a></span>';
+            // Model idle — auto-trigger load and keep polling
+            badge.innerHTML = '<span style="color:var(--warning);">◌ Loading CLIP…</span>';
+            loadModel();
           }
         })
         .catch(() => {
@@ -523,16 +527,25 @@
         })
           .then(r => r.json())
           .then(result => {
+            if (result.error) {
+              document.getElementById('frame-details').innerHTML =
+                `<span style="color:var(--warning);">⏳ ${result.error}</span>`;
+              return;
+            }
             totalAnalysed++;
-            updateThreatBars(result.threat_scores);
+            const label = result.label || 'Unknown';
+            const threatScore = result.threat_score || 0;
+            const safeScore = result.safe_score || 0;
+            const topThreatScore = result.top_threat_score || 0;
+            updateThreatBars(result.threat_scores || {});
             if (result.threat_detected) {
               totalDetections++;
               const icon = THREAT_ICONS[result.top_threat] || '⚠️';
-              showBanner('danger', `⚠️ ${result.label} Detected — threat score: ${(result.threat_score*100).toFixed(1)}%`);
-              addEvent('violence', `${icon} ${result.label} (${(result.top_threat_score*100).toFixed(1)}%)`);
+              showBanner('danger', `⚠️ ${label} Detected — threat score: ${(threatScore*100).toFixed(1)}%`);
+              addEvent('violence', `${icon} ${label} (${(topThreatScore*100).toFixed(1)}%)`);
             } else {
               totalSafe++;
-              showBanner('safe', `✅ Safe — ${result.label}`);
+              showBanner('safe', `✅ Safe — ${label}`);
             }
             updateStats();
 
@@ -553,11 +566,11 @@
             document.getElementById('frame-details').innerHTML = `
               <div style="margin-bottom:8px;">
                 <span style="font-weight:700; font-size:15px; color:${result.threat_detected ? 'var(--accent)' : '#4CAF50'};">
-                  ${result.threat_detected ? '⚠️ THREAT: ' + result.label.toUpperCase() : '✅ SAFE — ' + result.label}
+                  ${result.threat_detected ? '⚠️ THREAT: ' + label.toUpperCase() : '✅ SAFE — ' + label}
                 </span>
               </div>
-              <div style="margin-bottom:4px;"><strong>Threat Score:</strong> ${(result.threat_score*100).toFixed(1)}%</div>
-              <div style="margin-bottom:4px;"><strong>Safe Score:</strong> ${(result.safe_score*100).toFixed(1)}%</div>
+              <div style="margin-bottom:4px;"><strong>Threat Score:</strong> ${(threatScore*100).toFixed(1)}%</div>
+              <div style="margin-bottom:4px;"><strong>Safe Score:</strong> ${(safeScore*100).toFixed(1)}%</div>
               ${threatHtml}${safeHtml}
             `;
           })
@@ -625,11 +638,19 @@
           })
             .then(r => r.json())
             .then(result => {
+              if (result.error) {
+                document.getElementById('webcam-status').innerHTML =
+                  `<span style="color:var(--warning);">⏳ ${result.label || result.error}</span>`;
+                return;
+              }
               totalAnalysed++;
-              updateThreatBars(result.threat_scores);
+              updateThreatBars(result.threat_scores || {});
 
               const badge = document.getElementById('webcam-badge');
               const threatBadge = document.getElementById('webcam-threat-badge');
+              const label = result.label || 'Unknown';
+              const threatScore = result.threat_score || 0;
+              const safeScore = result.safe_score || 0;
 
               if (result.threat_detected) {
                 totalDetections++;
@@ -638,11 +659,11 @@
                 threatTypeCounts[ttype] = (threatTypeCounts[ttype] || 0) + 1;
                 badge.textContent = '⚠️ THREAT';
                 badge.className = 'webcam-badge danger';
-                threatBadge.textContent = `${icon} ${result.label}`;
+                threatBadge.textContent = `${icon} ${label}`;
                 threatBadge.className = 'webcam-badge danger';
-                addEvent('violence', `${icon} LIVE: ${result.label} (threat: ${(result.threat_score*100).toFixed(0)}%)`);
+                addEvent('violence', `${icon} LIVE: ${label} (threat: ${(threatScore*100).toFixed(0)}%)`);
                 document.getElementById('webcam-status').innerHTML =
-                  `<span style="color:var(--accent); font-weight:700;">⚠️ ${result.label} — ${(result.threat_score*100).toFixed(0)}% threat</span>`;
+                  `<span style="color:var(--accent); font-weight:700;">⚠️ ${label} — ${(threatScore*100).toFixed(0)}% threat</span>`;
               } else {
                 totalSafe++;
                 badge.textContent = '● SAFE';
@@ -650,7 +671,7 @@
                 threatBadge.textContent = '';
                 threatBadge.className = 'webcam-badge safe';
                 document.getElementById('webcam-status').innerHTML =
-                  `<span style="color:#4CAF50;">✅ Safe — ${result.label} (${(result.safe_score*100).toFixed(0)}%)</span>`;
+                  `<span style="color:#4CAF50;">✅ Safe — ${label} (${(safeScore*100).toFixed(0)}%)</span>`;
               }
               updateStats();
             })

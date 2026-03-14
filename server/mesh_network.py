@@ -6,17 +6,22 @@ from typing import Dict, List, Any
 from datetime import datetime, timedelta, timezone
 import uuid
 import json
+import threading
 from utils import calculate_distance
 
 
 class MeshNetworkSimulator:
     """Simulates mesh network for offline alert propagation"""
-    
+
+    # Maximum number of cached messages before forced cleanup
+    MAX_CACHE_SIZE = 10000
+
     def __init__(self):
         """Initialize mesh network simulator"""
         self.nodes = {}  # {node_id: node_data}
         self.message_cache = {}  # {message_id: message_data}
         self.propagation_paths = {}  # {alert_id: [node_ids]}
+        self._lock = threading.Lock()  # Thread safety for shared state
         
     def add_node(self, node_id: str, node_type: str, latitude: float, 
                  longitude: float, properties: Dict[str, Any] = None):
@@ -29,20 +34,25 @@ class MeshNetworkSimulator:
             latitude, longitude: GPS coordinates
             properties: Additional properties
         """
-        self.nodes[node_id] = {
-            'node_id': node_id,
-            'type': node_type,
-            'latitude': latitude,
-            'longitude': longitude,
-            'is_active': True,
-            'last_seen': datetime.now(timezone.utc),
-            'messages_relayed': 0,
-            'connected_nodes': [],
-            'properties': properties or {}
-        }
-        
-        # Find nearby nodes and establish connections
-        self._update_connections(node_id)
+        with self._lock:
+            self.nodes[node_id] = {
+                'node_id': node_id,
+                'type': node_type,
+                'latitude': latitude,
+                'longitude': longitude,
+                'is_active': True,
+                'last_seen': datetime.now(timezone.utc),
+                'messages_relayed': 0,
+                'connected_nodes': [],
+                'properties': properties or {}
+            }
+
+            # Find nearby nodes and establish bidirectional connections
+            self._update_connections(node_id)
+            # Update other nodes' connections to include this new node
+            for other_id in list(self.nodes.keys()):
+                if other_id != node_id:
+                    self._update_connections(other_id)
     
     def _update_connections(self, node_id: str):
         """Update connections for a node based on proximity"""
@@ -119,14 +129,17 @@ class MeshNetworkSimulator:
             'path': []
         }
         
-        # Store in cache
-        self.message_cache[message_id] = message
-        
+        # Store in cache (with bounded size)
+        with self._lock:
+            if len(self.message_cache) >= self.MAX_CACHE_SIZE:
+                self.clear_expired_messages()
+            self.message_cache[message_id] = message
+
         # Find starting node (nearest to alert location)
         if source_node is None:
             latitude = alert_data.get('latitude')
             longitude = alert_data.get('longitude')
-            if latitude and longitude:
+            if latitude is not None and longitude is not None:
                 source_node = self._find_nearest_node(latitude, longitude)
         
         if source_node is None or source_node not in self.nodes:
@@ -137,18 +150,19 @@ class MeshNetworkSimulator:
             }
         
         # Start propagation using flood algorithm with optimization
-        reached_nodes = self._flood_propagate(message, source_node, set())
-        
+        reached_nodes = self._flood_propagate(message, source_node, set(), depth=0)
+
         # Store propagation path
-        self.propagation_paths[alert_id] = list(reached_nodes)
-        
+        with self._lock:
+            self.propagation_paths[alert_id] = list(reached_nodes)
+
         return {
             'success': True,
             'message_id': message_id,
             'nodes_reached': len(reached_nodes),
-            'path': list(reached_nodes),
+            'path': message['path'],
             'hops': message['hops'],
-            'estimated_latency_ms': self._estimate_latency(len(reached_nodes))
+            'estimated_latency_ms': self._estimate_latency(message['hops'])
         }
     
     def _calculate_priority(self, alert_data: Dict[str, Any]) -> int:
